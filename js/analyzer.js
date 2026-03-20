@@ -13,11 +13,82 @@ function loadCatalogFromStorage() {
   return catalogData;
 }
 
-// ── BUILD SYSTEM PROMPT ───────────────
-function buildSystemPrompt() {
-  const catalogSummary = catalogData.slice(0, 400).map(r =>
+// ── SMART CATALOG FILTER ─────────────
+// Filters catalog by keywords relevant to the menu being analyzed
+// So Claude always sees the most relevant products regardless of catalog size
+function buildSmartCatalogSummary(menuKeywords = []) {
+  if (!catalogData.length) return 'SIN CATÁLOGO CARGADO';
+
+  // Food-related keyword categories to always include
+  const proteinKeywords = [
+    'res','carne','beef','steak','arrachera','ribeye','rib eye','new york','t-bone',
+    'costill','borrego','cordero','cerdo','pork','chamorro','barbacoa','birria',
+    'pollo','chicken','pechuga','muslo','ala','alita','wing',
+    'camaron','shrimp','langost','pulpo','octopus','almeja','clam','ostion',
+    'pescado','fish','atun','salmon','mahi','tilapia','robalo','huachinango',
+    'chorizo','sausage','salchicha','jamon','tocino','bacon','embutido',
+    'tuetano','marrow','costilla','short rib','picana','sirloin','cowboy'
+  ];
+
+  const otherKeywords = [
+    'queso','cheese','manchego','oaxaca','gouda','parmesano','mozzarella',
+    'crema','cream','mantequilla','butter','leche','milk','lacteo',
+    'aguacate','avocado','guacamole','frijol','bean','arroz','rice',
+    'papa','potato','cebolla','onion','tomate','tomato','chile','pepper',
+    'tortilla','pan','bread','masa',
+    'salsa','bbq','chimichurri','aderezo','mayonesa','mostaza','ketchup',
+    'aceite','oil','vinagre','limon','lime','ajo','garlic'
+  ];
+
+  const allKeywords = [...proteinKeywords, ...otherKeywords, ...menuKeywords];
+
+  // Normalize: lowercase, remove accents
+  const normalize = (str) => (str || '').toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+  // Score each product by keyword matches
+  const scored = catalogData.map(r => {
+    const material = normalize(r.Material || r.material || '');
+    const familia = normalize(r.Familia || r.familia || '');
+    const linea = normalize(r['Línea de Ventas'] || r.linea_ventas || '');
+    const combined = `${material} ${familia} ${linea}`;
+
+    let score = 0;
+    // Protein keywords score higher
+    proteinKeywords.forEach(kw => {
+      if (combined.includes(normalize(kw))) score += 3;
+    });
+    otherKeywords.forEach(kw => {
+      if (combined.includes(normalize(kw))) score += 1;
+    });
+    menuKeywords.forEach(kw => {
+      if (combined.includes(normalize(kw))) score += 2;
+    });
+    return { r, score };
+  });
+
+  // Take top 500 by score, then all with score > 0 up to 600
+  const relevant = scored
+    .filter(x => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 600)
+    .map(x => x.r);
+
+  // If not enough relevant, fill with first products
+  const finalList = relevant.length >= 50
+    ? relevant
+    : [...relevant, ...catalogData.slice(0, 300 - relevant.length)];
+
+  console.log(`Catalog filter: ${catalogData.length} total → ${finalList.length} relevant sent to Claude`);
+
+  return finalList.map(r =>
     `SKU:${r.SKU||r.sku||''}|Material:${r.Material||r.material||''}|Marca:${r.Marca||r.marca||''}|Familia:${r.Familia||r.familia||''}|Línea:${r['Línea de Ventas']||r.linea_ventas||''}`
   ).join('\n');
+}
+
+// ── BUILD SYSTEM PROMPT ───────────────
+function buildSystemPrompt(menuKeywords = []) {
+  const catalogSummary = buildSmartCatalogSummary(menuKeywords);
 
   return `Eres un experto analizador de menús de restaurantes para distribuidoras de alimentos. Sigues reglas estrictas.
 
@@ -118,6 +189,12 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
     }
   ];
 
+  // Extract keywords from biz name and city to improve catalog filtering
+  const menuKeywords = [
+    ...bizName.toLowerCase().split(/\s+/),
+    ...bizCity.toLowerCase().split(/\s+/)
+  ].filter(w => w.length > 3);
+
   // Llamar a /api/analyze (proxy serverless en Vercel — evita CORS)
   const resp = await fetch('/api/analyze', {
     method: 'POST',
@@ -125,7 +202,7 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 8096,
-      system: buildSystemPrompt(),
+      system: buildSystemPrompt(menuKeywords),
       messages: [{ role: 'user', content: userContent }]
     })
   });
