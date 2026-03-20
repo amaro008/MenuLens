@@ -199,15 +199,26 @@ function renderAll(d) {
     <div class="sum-card"><div class="sum-num" style="color:#D97706">${s.approx_matches || 0}</div><div class="sum-label">Aproximados</div></div>`;
 
   // Top 10
-  document.getElementById('top10').innerHTML = (s.top10_skus || []).slice(0, 10).map((item, i) => `
-    <div class="sku-row">
-      <div class="sku-rank">${i + 1}</div>
-      <div class="sku-info">
-        <div class="sku-name">${item.material || item.sku}</div>
+  document.getElementById('top10').innerHTML = (s.top10_skus || []).slice(0, 10).map((item, i) => {
+    const prioClass = (item.priority || 'P5').toLowerCase();
+    const dishes = (item.dishes || []).slice(0, 3).join(', ');
+    return `
+    <div class="sku-row" style="align-items:flex-start;padding:11px 0">
+      <div class="sku-rank" style="margin-top:2px">${i + 1}</div>
+      <div class="sku-info" style="flex:1">
+        <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+          <div class="sku-name">${item.material || item.sku}</div>
+          <span class="prio-badge ${prioClass}" style="font-size:9px;width:auto;padding:2px 6px;border-radius:4px">${item.priority || ''}</span>
+        </div>
         <div class="sku-code">${item.sku}${item.brand ? ' · ' + item.brand : ''}</div>
+        ${dishes ? `<div style="font-size:11px;color:var(--text-m);margin-top:4px;font-style:italic">📍 ${dishes}</div>` : ''}
       </div>
-      <div style="font-size:12px;color:var(--text-m)">${item.mentions} menciones</div>
-    </div>`).join('') || '<div style="color:var(--text-l);font-size:13px;padding:12px 0">Sin datos</div>';
+      <div style="font-size:12px;color:var(--text-m);flex-shrink:0;text-align:right">
+        <div style="font-weight:600;color:var(--text)">${item.mentions}</div>
+        <div style="font-size:10px">menciones</div>
+      </div>
+    </div>`;
+  }).join('') || '<div style="color:var(--text-l);font-size:13px;padding:12px 0">Sin datos</div>';
 
   // Findings
   document.getElementById('findings').innerHTML = (s.key_findings || []).map(f =>
