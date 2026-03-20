@@ -2,6 +2,21 @@
 // analyzer.js — análisis con Claude API
 // ══════════════════════════════════════
 
+// ── DEBUG LOGGER ─────────────────────
+function dbg(msg, type = 'info') {
+  const colors = { info: '#00ff88', warn: '#ffcc00', error: '#ff4444' };
+  console.log(msg);
+  const panel = document.getElementById('debugPanel');
+  if (panel) {
+    panel.style.display = 'block';
+    const line = document.createElement('div');
+    line.style.color = colors[type] || '#00ff88';
+    line.textContent = `► ${msg}`;
+    panel.appendChild(line);
+    panel.scrollTop = panel.scrollHeight;
+  }
+}
+
 // ── CATALOG ───────────────────────────
 let catalogData = [];
 
@@ -59,7 +74,7 @@ function buildSmartCatalogSummary() {
     ...otherProducts.slice(0, 100)
   ];
 
-  console.log(`Catalog filter: ${catalogData.length} total → ${priorityProducts.length} protein + ${Math.min(secondaryProducts.length,200)} secondary + ${Math.min(otherProducts.length,100)} other = ${finalList.length} sent to Claude`);
+  dbg(`Catálogo: ${catalogData.length} total → ${priorityProducts.length} proteína + ${Math.min(secondaryProducts.length,200)} secundarios = ${finalList.length} enviados a Claude`);
 
   return finalList.join('\n');
 }
@@ -235,12 +250,12 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
   // Build prompt and check size
   const systemPrompt = buildSystemPrompt();
   const approxTokens = Math.round(systemPrompt.length / 4);
-  console.log(`System prompt size: ~${approxTokens} tokens (${systemPrompt.length} chars)`);
+  dbg(`Prompt: ~${approxTokens} tokens (${systemPrompt.length} chars)`);
 
   // If prompt is too large, use a smaller catalog sample
   let finalPrompt = systemPrompt;
   if (approxTokens > 60000) {
-    console.warn('Prompt too large, using reduced catalog...');
+    dbg('⚠️ Prompt demasiado grande, usando catálogo reducido...', 'warn');
     finalPrompt = buildReducedPrompt();
   }
 
@@ -263,7 +278,7 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
 
   const data = await resp.json();
   const raw = data.content[0].text.trim();
-  console.log('Claude raw response (first 300):', raw.substring(0, 300));
+  dbg(`Respuesta Claude (inicio): ${raw.substring(0, 150)}`); dbg(`Stop reason: ${data.stop_reason} | tokens usados: ${data.usage?.output_tokens}`);
 
   let parsed = null;
 
@@ -317,7 +332,7 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
   }
 
   if (!parsed) {
-    console.error('All parsing strategies failed. Raw response:', raw);
+    dbg('❌ Todas las estrategias de parsing fallaron', 'error'); dbg(`Respuesta completa: ${raw.substring(0, 500)}`, 'error');
     // Return minimal valid structure so app doesn't crash
     parsed = {
       restaurant_name: '',
