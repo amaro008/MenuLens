@@ -34,14 +34,18 @@
           <div class="card">
             <div class="card-body">
               <div class="card-title">1 · Datos del restaurante</div>
+              <!-- Advisor code shown (read-only, comes from user profile) -->
+              <div id="advisorCodeBanner" style="display:none;background:var(--blue-l);border:1px solid #93C5FD;border-radius:var(--r-s);padding:8px 12px;font-size:12px;color:#1E40AF;margin-bottom:12px">
+                👤 Asesor: <strong id="advisorName"></strong> — Código: <strong id="advisorCode"></strong>
+              </div>
               <div class="form-row" style="margin-bottom:12px">
                 <div class="form-group">
-                  <label class="form-label">Número de cliente <span style="color:var(--red)">*</span></label>
-                  <input class="form-input" id="bizClientNum" placeholder="Ej: 100234" oninput="checkAnalyzeBtn()">
+                  <label class="form-label">Nombre comercial <span style="color:var(--red)">*</span></label>
+                  <input class="form-input" id="bizName" placeholder="Ej: La Trattoria del Centro" oninput="checkBtn()">
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Nombre comercial <span style="color:var(--red)">*</span></label>
-                  <input class="form-input" id="bizName" placeholder="Ej: La Trattoria del Centro" oninput="checkAnalyzeBtn()">
+                  <label class="form-label">Número de cliente del restaurante</label>
+                  <input class="form-input" id="bizClientNum" placeholder="Ej: CLI-00234 (opcional)">
                 </div>
               </div>
               <div class="form-row" style="margin-bottom:12px">
@@ -145,6 +149,16 @@ let _file = null;
   renderTopbar(_user, false);
   renderSidebar(currentPage, _user.role);
 
+  // Show advisor code banner if user has advisor_code
+  if (_user.advisor_code || _user.code) {
+    const banner = document.getElementById('advisorCodeBanner');
+    if (banner) {
+      banner.style.display = 'block';
+      document.getElementById('advisorName').textContent = _user.name || _user.email;
+      document.getElementById('advisorCode').textContent = _user.advisor_code || _user.code || '—';
+    }
+  }
+
   // Load catalog
   loadCatalogFromStorage();
   if (!catalogData.length) {
@@ -196,9 +210,8 @@ function clearFile() {
 }
 
 function checkBtn() {
-  const clientNum = document.getElementById('bizClientNum')?.value.trim();
   const name = document.getElementById('bizName')?.value.trim();
-  document.getElementById('analyzeBtn').disabled = !_fileBase64 || !clientNum || !name;
+  document.getElementById('analyzeBtn').disabled = !_fileBase64 || !name;
 }
 
 // Drag & drop
@@ -291,11 +304,10 @@ async function startAnalysis() {
   if (!_fileBase64) { toast('Sube un menú primero', 'error'); return; }
   if (!Config.anthropicKey()) { toast('Configura el Anthropic API Key en el panel admin', 'error'); return; }
 
-  const bizClientNum = document.getElementById('bizClientNum').value.trim();
+  const bizClientNum = document.getElementById('bizClientNum')?.value.trim() || '';
   const bizName = document.getElementById('bizName').value.trim() || 'Restaurante';
   const bizCity = document.getElementById('bizCity').value.trim();
   const bizZone = document.getElementById('bizZone').value.trim();
-  if (!bizClientNum) { toast('El número de cliente es obligatorio', 'error'); return; }
   const startTime = Date.now();
 
   showLoading('Analizando menú…', '🧠 Extrayendo platillos e ingredientes…');

@@ -38,13 +38,19 @@
             <label class="form-label">Contraseña temporal</label>
             <input class="form-input" id="uPassword" type="password" placeholder="Mín. 8 caracteres">
           </div>
-          <div class="form-group">
-            <label class="form-label">Rol</label>
-            <select class="form-input" id="uRole">
-              <option value="advisor">Asesor</option>
-              <option value="supervisor">Supervisor</option>
-              <option value="admin">Administrador</option>
-            </select>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Rol</label>
+              <select class="form-input" id="uRole">
+                <option value="advisor">Asesor</option>
+                <option value="supervisor">Supervisor</option>
+                <option value="admin">Administrador</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Código de asesor</label>
+              <input class="form-input" id="uAdvisorCode" placeholder="Ej: ASE-001">
+            </div>
           </div>
         </div>
       </div>
@@ -204,11 +210,13 @@ async function saveUser() {
     });
 
     // Create auth user
+    const advisorCode = document.getElementById('uAdvisorCode').value.trim();
+
     const { data: authData, error: authErr } = await adminSb.auth.admin.createUser({
       email,
       password: pwd,
       email_confirm: true,
-      user_metadata: { name, role }
+      user_metadata: { name, role, advisor_code: advisorCode }
     });
 
     if (authErr) {
@@ -217,12 +225,13 @@ async function saveUser() {
       return;
     }
 
-    // Upsert profile in public.users (trigger may or may not fire)
+    // Upsert profile in public.users
     await adminSb.from('users').upsert({
       id: authData.user.id,
       email,
       name,
       role,
+      advisor_code: advisorCode || null,
       active: true
     });
 
