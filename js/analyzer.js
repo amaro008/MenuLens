@@ -70,10 +70,95 @@ async function loadCatalogFromSupabase() {
   return catalogData;
 }
 
+// ── SUBLINEA SYNONYM MAP ─────────────
+// Built dynamically from the actual catalog sublíneas
+// Maps menu terms → catalog sublínea names
+// This is the permanent solution — no keywords needed for standard cuts
+function buildSublineaSynonymMap() {
+  const sublineas = [...new Set(
+    catalogData
+      .filter(r => r.Familia && ['RES','AVES','PESCADOS Y MARISCOS','CERDO','CARNES FRIAS','CORDERO Y OTROS']
+        .includes((r.Familia||'').toUpperCase()))
+      .map(r => (r['Sublínea'] || r.sublinea || '').toString().trim().toUpperCase())
+      .filter(Boolean)
+  )];
+
+  // Static synonym map — common menu terms → catalog sublínea names
+  const SYNONYMS = {
+    // Res
+    'arrachera': ['ARRACHERA','OUTSIDE SKIRT','INSIDE SKIRT'],
+    'skirt steak': ['ARRACHERA','OUTSIDE SKIRT','INSIDE SKIRT'],
+    'ribeye': ['RIBEYE','RIB STEAK','EXPORT RIB'],
+    'rib eye': ['RIBEYE','RIB STEAK','EXPORT RIB'],
+    'new york': ['NEW YORK','TOP SIRLOIN'],
+    't-bone': ['T-BONE'],
+    'tbone': ['T-BONE'],
+    'cowboy': ['COWBOY'],
+    'cowboy steak': ['COWBOY'],
+    'tomahawk': ['TOMAHAWK'],
+    'picaña': ['PICAÑA'],
+    'picana': ['PICAÑA'],
+    'short rib': ['SHORT RIBS','RIBS'],
+    'shortrib': ['SHORT RIBS'],
+    'costilla de res': ['SHORT RIBS','RIBS'],
+    'brisket': ['BRISKET'],
+    'sirloin': ['SIRLOIN','TOP SIRLOIN'],
+    'filete de res': ['FILETE'],
+    'flat iron': ['FLAT IRON'],
+    'tri tip': ['TRI TIP'],
+    'porterhouse': ['PORTERHOUSE','T-BONE'],
+    // Cerdo
+    'costilla de cerdo': ['BACK RIB','SPARE RIB','COSTILLAS'],
+    'back rib': ['BACK RIB'],
+    'spare rib': ['SPARE RIB'],
+    'pork belly': ['PORK BELLY'],
+    'chamorro': ['CHAMORRO'],
+    'lomo de cerdo': ['LOMO'],
+    'chuleta': ['CHULETA NATURAL','CHULETA AHUMADA'],
+    // Aves
+    'pechuga': ['PECHUGA'],
+    'alita': ['ALAS'],
+    'alitas': ['ALAS'],
+    'wings': ['ALAS'],
+    'pollo entero': ['ENTERO'],
+    'boneless': ['BONELESS'],
+    'nuggets': ['NUGGETS'],
+    'pierna': ['PIERNA Y MUSLO'],
+    // Mariscos
+    'camarón': ['CAMARON'],
+    'camaron': ['CAMARON'],
+    'shrimp': ['CAMARON'],
+    'pulpo': ['PULPO'],
+    'langosta': ['LANGOSTA'],
+    'salmón': ['SALMON'],
+    'salmon': ['SALMON'],
+    'atún fresco': ['ATUN'],
+    'atun fresco': ['ATUN'],
+    'tilapia': ['TILAPIA'],
+    'basa': ['BASA'],
+    // Carnes frías
+    'chorizo': ['CHORIZOS','CHORIZOS FRESCOS'],
+    'jamón': ['JAMON COCIDO','JAMON PIERNA','JAMON VIRGINIA'],
+    'tocino': ['TOCINO REBANADO'],
+    'salchicha': ['SALCHICHA TRADICIONA','SALCHICHA ASAR'],
+    'pepperoni': ['PEPPERONI','PEPPERONI COCIDO'],
+    'pastrami': ['PASTRAMI'],
+    'salami': ['SALAMI COCIDO','SALAMI MADURADO'],
+  };
+
+  // Build active map — only include sublíneas that exist in loaded catalog
+  const activeMap = {};
+  Object.entries(SYNONYMS).forEach(([term, subs]) => {
+    const activeSubs = subs.filter(s => sublineas.includes(s));
+    if (activeSubs.length > 0) {
+      activeMap[term] = activeSubs;
+    }
+  });
+
+  return activeMap;
+}
+
 // ── SMART CATALOG FILTER ─────────────
-// Strategy: always send ALL protein families first (RES, AVES, PESCADOS, CERDO, CARNES FRIAS)
-// then fill remaining slots with other families
-// This guarantees protein matches regardless of catalog size
 function buildSmartCatalogSummary() {
   if (!catalogData.length) return 'SIN CATÁLOGO CARGADO';
 
@@ -124,10 +209,17 @@ function buildSmartCatalogSummary() {
 // ── BUILD SYSTEM PROMPT ───────────────
 function buildSystemPrompt() {
   const catalogSummary = buildSmartCatalogSummary();
-  return buildSystemPromptWithCatalog(catalogSummary);
+  const synonymMap = buildSublineaSynonymMap();
+
+  // Format synonym map for the prompt
+  const synonymMapText = Object.entries(synonymMap)
+    .map(([term, subs]) => `  "${term}" → Sublínea: ${subs.join(' o ')}`)
+    .join('\n');
+
+  return buildSystemPromptWithCatalog(catalogSummary, synonymMapText);
 }
 
-function buildSystemPromptWithCatalog(catalogSummary) {
+function buildSystemPromptWithCatalog(catalogSummary, synonymMapText = "") {
   return `Eres un experto analizador de menús de restaurantes para distribuidoras de alimentos. Sigues reglas estrictas.
 
 CATÁLOGO DE PRODUCTOS DISPONIBLE:
@@ -192,23 +284,35 @@ REGLA DE CONTEXTO (CRÍTICA para desambiguar):
 - "atún" en sándwich → ABARROTES puede ser válido
 - Usar Keywords del catálogo si están disponibles para confirmar el match
 
-ESTRATEGIA DE BÚSQUEDA:
-1. Primero verificar si hay Keywords en el catálogo que coincidan con el ingrediente o platillo
-2. Para proteínas: buscar en Sublinea y Familia (más confiable que Material)
-   - "camarón" → Sublinea:CAMARON, Familia:PESCADOS Y MARISCOS
-   - "arrachera" → Sublinea:ARRACHERA, Familia:RES
-   - "ribeye/rib eye" → Sublinea:RIBEYE, Familia:RES
-   - "pollo/alita/pechuga" → Familia:AVES
-   - "costillas" → Sublinea con COSTILL o RIB, Familia:RES o CERDO
-   - "chorizo" → Familia:CARNES FRIAS, Sublinea:CHORIZO
-   - "pulpo" → Sublinea:PULPO, Familia:PESCADOS Y MARISCOS
-   - "langosta" → Sublinea:LANGOSTA, Familia:PESCADOS Y MARISCOS
-   - "atún fresco/filete" → Familia:PESCADOS Y MARISCOS (NO ABARROTES)
-3. Para otros: buscar en Material usando término núcleo
-4. Material está en MAYÚSCULAS: "RIBEYE LIPON 112A CAB SWIFT" — buscar substring
-5. Normalizar: sin acentos, mayúsculas, buscar substring no exacto
-6. Empates: elegir mejor candidato usando contexto del platillo + hasta 3 alternativas
-7. Confianza Alta=match en Sublinea/Familia+contexto, Media=variante Material, Baja=débil
+MAPA DE SUBLÍNEAS — PUNTO DE PARTIDA PARA MATCHING:
+${synonymMapText || "(mapa no disponible)"}
+
+ESTRATEGIA DE MATCHING EN 3 PASOS:
+
+PASO 1 — IDENTIFICAR FAMILIA/SUBLÍNEA:
+- Usar el mapa de arriba como punto de partida
+- Términos genéricos o en plural → mapear a la Familia:
+  "quesos" → QUESOS | "mariscos" → PESCADOS Y MARISCOS | "embutidos" → CARNES FRIAS
+
+PASO 2 — ELEGIR SKU ESPECÍFICO POR CONTEXTO DEL PLATILLO:
+Dentro de la familia, elegir el producto más lógico según nombre y precio del platillo:
+- "queso fundido/derretido" → MANCHEGO, GOUDA, OAXACA
+- "ensalada con queso" → PANELA, COTIJA, FETA
+- "pizza/pasta" → MOZZARELLA, PARMESANO, MANCHEGO
+- "costillas BBQ" → BACK RIB o SPARE RIB cerdo
+- "costillas res" → SHORT RIBS
+- "camarón al ajillo/mantequilla" → camarón fresco grande (31/40+)
+- "ceviche/aguachile" → camarón fresco mediano
+- Precio > $300 → preferir premium (CAB, PRIME, VIGAR BLACK)
+- Precio $100-300 → estándar (CAB, COMNOR CHOICE)
+- Precio < $100 → económico o nacional
+
+PASO 3 — REPORTAR:
+- Match por Sublínea → Confianza Alta
+- Match por Material → Confianza Media
+- Producto genérico → reportar MEJOR opción + 2-3 alternativas
+- GAP solo si genuinamente no hay nada en el catálogo
+- NUNCA gap para: arrachera, t-bone, cowboy, short rib, ribeye, camarón, pulpo, langosta, alitas, chorizo
 
 REGLA TOP 10 — ORDEN OBLIGATORIO:
 1. Agrupa todos los matches por prioridad
