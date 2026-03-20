@@ -34,50 +34,15 @@
           <div class="card">
             <div class="card-body">
               <div class="card-title">1 · Datos del restaurante</div>
-              <!-- Advisor code shown (read-only, comes from user profile) -->
-              <div id="advisorCodeBanner" style="display:none;background:var(--blue-l);border:1px solid #93C5FD;border-radius:var(--r-s);padding:8px 12px;font-size:12px;color:#1E40AF;margin-bottom:12px">
-                👤 Asesor: <strong id="advisorName"></strong> — Código: <strong id="advisorCode"></strong>
-              </div>
               <div class="form-row" style="margin-bottom:12px">
                 <div class="form-group">
                   <label class="form-label">Nombre comercial <span style="color:var(--red)">*</span></label>
-                  <input class="form-input" id="bizName" placeholder="Ej: La Trattoria del Centro" oninput="checkBtn()">
+                  <input class="form-input" id="bizName" placeholder="Ej: Mr. Ribs Bar & Grill" oninput="checkBtn()">
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Número de cliente del restaurante</label>
-                  <input class="form-input" id="bizClientNum" placeholder="Ej: CLI-00234 (opcional)">
+                  <label class="form-label">Número de cliente <span style="color:var(--red)">*</span></label>
+                  <input class="form-input" id="bizClientNum" placeholder="Ej: CLI-00234" oninput="checkBtn()">
                 </div>
-              </div>
-              <div class="form-row" style="margin-bottom:12px">
-                <div class="form-group">
-                  <label class="form-label">Ciudad</label>
-                  <input class="form-input" id="bizCity" placeholder="Ej: Ciudad de México">
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Zona / Colonia</label>
-                  <input class="form-input" id="bizZone" placeholder="Ej: Roma Norte">
-                </div>
-              </div>
-
-              <!-- MAPS SECTION -->
-              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
-                <button class="btn btn-outline btn-sm" onclick="openMaps()">🗺 Buscar en Google Maps</button>
-                <button class="btn btn-outline btn-sm" onclick="geolocate()">📍 Usar mi ubicación</button>
-                <span style="font-size:11px;color:var(--text-l)">Para enriquecer el perfil del negocio</span>
-              </div>
-
-              <!-- MAP EMBED -->
-              <div id="mapContainer" style="display:none;border-radius:var(--r-s);overflow:hidden;border:1px solid var(--border);margin-bottom:10px">
-                <iframe id="mapFrame" width="100%" height="200" style="border:0;display:block" allowfullscreen loading="lazy"></iframe>
-              </div>
-
-              <!-- GEO INFO -->
-              <div id="geoInfo" style="display:none;background:var(--blue-l);border:1px solid #93C5FD;border-radius:var(--r-s);padding:9px 12px;font-size:12px;color:#1E40AF;margin-bottom:8px">
-                📍 <span id="geoInfoText"></span>
-              </div>
-
-              <div id="bizConfirmed" style="display:none;background:var(--green-l);border:1px solid #86EFAC;border-radius:var(--r-s);padding:9px 12px;font-size:12px;color:#15803D">
-                ✓ <span id="bizConfirmedText"></span>
               </div>
             </div>
           </div>
@@ -86,11 +51,11 @@
           <div class="card">
             <div class="card-body">
               <div class="card-title">2 · Sube el menú</div>
-              <div class="upload-zone" id="uploadZone">
-                <input type="file" id="fileInput" accept=".pdf,image/*" onchange="handleFileSelect(this.files[0])">
+              <div class="upload-zone" id="uploadZone" style="position:relative">
+                <input type="file" id="fileInput" accept=".pdf,image/*" multiple style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%" onchange="handleFiles(this.files)">
                 <div class="upload-icon">📄</div>
                 <div class="upload-title">Arrastra o haz clic para subir</div>
-                <div class="upload-sub">PDF, JPG, PNG o WEBP · Máx. 20MB</div>
+                <div class="upload-sub">PDF o imágenes · múltiples archivos · máx 4MB c/u</div>
                 <div class="upload-types">
                   <span class="type-tag">PDF</span>
                   <span class="type-tag">JPG</span>
@@ -99,17 +64,9 @@
                 </div>
               </div>
 
-              <div id="filePreview" style="display:none;margin-top:12px">
-                <div style="display:flex;align-items:center;gap:10px;background:var(--gray-l);border-radius:var(--r-s);padding:10px 12px">
-                  <span style="font-size:20px" id="fileIcon">📄</span>
-                  <div style="flex:1">
-                    <div style="font-size:13px;font-weight:600" id="fileName"></div>
-                    <div style="font-size:11px;color:var(--text-m)" id="fileSize"></div>
-                  </div>
-                  <button class="btn btn-ghost btn-sm" onclick="clearFile()">✕</button>
-                </div>
-                <img id="previewImg" style="display:none;width:100%;max-height:220px;object-fit:contain;border-radius:var(--r-s);margin-top:8px;border:1px solid var(--border)">
-              </div>
+              <!-- Multi-file list -->
+              <div id="fileList" style="margin-top:10px;display:flex;flex-direction:column;gap:6px"></div>
+              <img id="previewImg" style="display:none;width:100%;max-height:180px;object-fit:contain;border-radius:var(--r-s);margin-top:8px;border:1px solid var(--border)">
             </div>
           </div>
 
@@ -175,46 +132,74 @@ let _file = null;
 })();
 
 // ── FILE HANDLING ─────────────────────
-function handleFileSelect(file) {
-  if (!file) return;
-  // Vercel free plan: 4.5MB limit on serverless functions
-  // We allow up to 4MB to be safe
-  const maxSize = 4 * 1024 * 1024;
-  if (file.size > maxSize) {
-    toast('El archivo supera 4MB. Comprime el PDF o usa una imagen JPG/PNG del menú.', 'error');
-    return;
-  }
-  _file = file;
-  _fileType = file.type;
-  const isImg = file.type.startsWith('image/');
-  document.getElementById('fileIcon').textContent = isImg ? '🖼' : '📄';
-  document.getElementById('fileName').textContent = file.name;
-  document.getElementById('fileSize').textContent = (file.size / 1024).toFixed(0) + ' KB';
-  document.getElementById('filePreview').style.display = 'block';
+// Multi-file state
+let _files = [];
+let _currentFileIdx = 0;
 
-  const reader = new FileReader();
-  reader.onload = e => {
-    _fileBase64 = e.target.result.split(',')[1];
-    if (isImg) {
-      document.getElementById('previewImg').src = e.target.result;
-      document.getElementById('previewImg').style.display = 'block';
-    }
-    checkBtn();
-  };
-  reader.readAsDataURL(file);
+function handleFiles(fileList) {
+  if (!fileList || !fileList.length) return;
+  const MAX = 4 * 1024 * 1024;
+  Array.from(fileList).forEach(file => {
+    if (file.size > MAX) { toast(`${file.name} supera 4MB — omitido`, 'error'); return; }
+    const reader = new FileReader();
+    reader.onload = e => {
+      const base64 = e.target.result.split(',')[1];
+      _files.push({ name: file.name, base64, type: file.type, size: file.size });
+      if (_files.length === 1) setActiveFile(0);
+      else renderFileList();
+      checkBtn();
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function handleFileSelect(file) { if (file) handleFiles([file]); }
+
+function renderFileList() {
+  const el = document.getElementById('fileList');
+  if (!el) return;
+  el.innerHTML = _files.map((f, i) => `
+    <div style="display:flex;align-items:center;gap:8px;background:var(--gray-l);border-radius:var(--r-s);padding:8px 10px;border:1px solid ${i===_currentFileIdx?'var(--red)':'transparent'}">
+      <span style="font-size:16px">${f.type==='application/pdf'?'📄':'🖼'}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.name}</div>
+        <div style="font-size:10px;color:var(--text-m)">${(f.size/1024).toFixed(0)} KB${i===_currentFileIdx?' · <span style=color:var(--red)>Activo</span>':''}</div>
+      </div>
+      ${i!==_currentFileIdx?`<button onclick="setActiveFile(${i})" style="font-size:11px;color:var(--text-m);background:none;border:0.5px solid var(--border);border-radius:4px;padding:2px 6px;cursor:pointer">Usar</button>`:''}
+      <button onclick="removeFile(${i})" style="font-size:16px;color:var(--text-m);background:none;border:none;cursor:pointer">✕</button>
+    </div>`).join('');
+}
+
+function setActiveFile(idx) {
+  _currentFileIdx = idx;
+  const f = _files[idx];
+  _fileBase64 = f.base64; _fileType = f.type;
+  const img = document.getElementById('previewImg');
+  if (f.type.startsWith('image/')) { img.src = 'data:'+f.type+';base64,'+f.base64; img.style.display='block'; }
+  else img.style.display = 'none';
+  renderFileList();
+  checkBtn();
+}
+
+function removeFile(idx) {
+  _files.splice(idx, 1);
+  if (!_files.length) { clearFile(); return; }
+  _currentFileIdx = Math.min(_currentFileIdx, _files.length-1);
+  setActiveFile(_currentFileIdx);
 }
 
 function clearFile() {
-  _file = null; _fileBase64 = null;
-  document.getElementById('filePreview').style.display = 'none';
-  document.getElementById('previewImg').style.display = 'none';
-  document.getElementById('fileInput').value = '';
+  _files = []; _fileBase64 = null; _fileType = null; _currentFileIdx = 0;
+  const fl = document.getElementById('fileList'); if(fl) fl.innerHTML = '';
+  const img = document.getElementById('previewImg'); if(img) img.style.display='none';
+  const fi = document.getElementById('fileInput'); if(fi) fi.value='';
   checkBtn();
 }
 
 function checkBtn() {
   const name = document.getElementById('bizName')?.value.trim();
-  document.getElementById('analyzeBtn').disabled = !_fileBase64 || !name;
+  const client = document.getElementById('bizClientNum')?.value.trim();
+  document.getElementById('analyzeBtn').disabled = !_fileBase64 || !name || !client;
 }
 
 // Drag & drop
@@ -223,16 +208,11 @@ dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('dr
 dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
 dz.addEventListener('drop', e => {
   e.preventDefault(); dz.classList.remove('drag');
-  if (e.dataTransfer.files[0]) handleFileSelect(e.dataTransfer.files[0]);
+  if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
 });
 
 // ── MAPS LINK ─────────────────────────
-function openMaps() {
-  const name = document.getElementById('bizName').value.trim();
-  const city = document.getElementById('bizCity').value.trim();
-  const zone = document.getElementById('bizZone').value.trim();
-  if (!name) { toast('Escribe el nombre comercial primero', 'error'); return; }
-  const q = encodeURIComponent([name, zone, city].filter(Boolean).join(', '));
+
   // Open Maps in new tab
   window.open(`https://www.google.com/maps/search/?api=1&query=${q}`, '_blank');
   // Show embedded map
@@ -241,22 +221,13 @@ function openMaps() {
   document.getElementById('bizConfirmedText').textContent = `"${name}" — confirma en la pestaña de Maps y regresa aquí`;
 }
 
-function showMapEmbed(query) {
-  const frame = document.getElementById('mapFrame');
-  const container = document.getElementById('mapContainer');
-  // Use OpenStreetMap embed (free, no API key needed)
-  frame.src = `https://www.openstreetmap.org/export/embed.html?bbox=-180,-90,180,90&layer=mapnik&marker=0,0&query=${query}`;
+`;
   // Use Google Maps embed (works without key for basic embed)
   frame.src = `https://maps.google.com/maps?q=${query}&output=embed&z=15`;
   container.style.display = 'block';
 }
 
-function geolocate() {
-  if (!navigator.geolocation) { toast('Geolocalización no disponible en este navegador', 'error'); return; }
-  toast('Obteniendo ubicación...', '');
-  navigator.geolocation.getCurrentPosition(
-    async (pos) => {
-      const { latitude: lat, longitude: lng } = pos.coords;
+
       // Reverse geocode using nominatim (free, no API key)
       try {
         const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`, {
@@ -323,8 +294,8 @@ async function startAnalysis() {
 
   const bizClientNum = document.getElementById('bizClientNum')?.value.trim() || '';
   const bizName = document.getElementById('bizName').value.trim() || 'Restaurante';
-  const bizCity = document.getElementById('bizCity').value.trim();
-  const bizZone = document.getElementById('bizZone').value.trim();
+  const bizCity = '';
+  const bizZone = '';
   const startTime = Date.now();
 
   showLoading('Analizando menú…', '🧠 Extrayendo platillos e ingredientes…');
