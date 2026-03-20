@@ -1,4 +1,4 @@
-// api/upload-catalog.js — usa UPSERT para evitar duplicados
+// api/upload-catalog.js — DELETE then INSERT via RPC
 export const config = {
   api: { bodyParser: { sizeLimit: '15mb' } }
 };
@@ -21,14 +21,37 @@ export default async function handler(req, res) {
   }
 
   const base = `${supabaseUrl}/rest/v1`;
-  const headers = {
-    'Content-Type': 'application/json',
+  const authHeaders = {
     'apikey': supabaseKey,
     'Authorization': `Bearer ${supabaseKey}`,
-    'Prefer': 'resolution=merge-duplicates,return=minimal'
+    'Content-Type': 'application/json'
   };
 
   try {
+    // STEP 1: Truncate via RPC (most reliable way)
+    const rpcResp = await fetch(`${base}/rpc/truncate_sku_catalog`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({ p_company: company })
+    });
+    // If RPC doesn't exist, try direct DELETE with all rows
+    if (!rpcResp.ok) {
+      // Delete using a filter that matches all rows for this company
+      await fetch(`${base}/sku_catalog?company=eq.${company}&id=gte.0`, {
+        method: 'DELETE',
+        headers: { ...authHeaders, 'Prefer': 'return=minimal' }
+      });
+      // Also try without id filter
+      await fetch(`${base}/sku_catalog?company=eq.${company}`, {
+        method: 'DELETE',
+        headers: { ...authHeaders, 'Prefer': 'return=minimal' }
+      });
+    }
+
+    console.log('Delete step completed');
+    await new Promise(r => setTimeout(r, 1000)); // wait for delete
+
+    // STEP 2: Prepare rows
     const rows = products
       .map(p => ({
         company,
@@ -43,15 +66,18 @@ export default async function handler(req, res) {
       }))
       .filter(p => p.sku && p.material);
 
-    // Upsert in batches of 300
-    const BATCH = 300;
-    let upserted = 0;
+    // STEP 3: Insert with ON CONFLICT DO UPDATE via Prefer header
+    const BATCH = 200;
+    let inserted = 0;
 
     for (let i = 0; i < rows.length; i += BATCH) {
       const batch = rows.slice(i, i + BATCH);
       const resp = await fetch(`${base}/sku_catalog`, {
         method: 'POST',
-        headers,
+        headers: {
+          ...authHeaders,
+          'Prefer': 'resolution=merge-duplicates,return=minimal'
+        },
         body: JSON.stringify(batch)
       });
 
@@ -59,14 +85,12 @@ export default async function handler(req, res) {
         const err = await resp.text();
         throw new Error(`Batch ${Math.floor(i/BATCH)+1}: ${err.substring(0, 300)}`);
       }
-      upserted += batch.length;
-      console.log(`Upserted ${upserted}/${rows.length}`);
+      inserted += batch.length;
     }
 
-    return res.status(200).json({ success: true, inserted: upserted, total: products.length });
+    return res.status(200).json({ success: true, inserted, total: products.length });
 
   } catch(e) {
-    console.error('Upload error:', e.message);
     return res.status(500).json({ error: e.message });
   }
 }
