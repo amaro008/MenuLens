@@ -109,6 +109,20 @@ TIPOS DE COMIDA — elige el más cercano:
 Mexicana, Italiana, Americana, Mariscos, Asiática, Mediterránea,
 Panadería/Café, Fast Food, Saludable/Vegana, Internacional, Fusión, Otra
 
+ANÁLISIS DE PRECIOS (OBLIGATORIO):
+- Clasificar cada platillo en: entrada, platillo, postre, bebida, otro
+- NO incluir bebidas en los promedios de precio
+- Calcular precio promedio SOLO para: entrada, platillo, postre (por separado)
+- price_tier: economico (platillos avg < $100), medio ($100-$250), premium (> $250)
+- dominant_protein: la proteína más frecuente en el menú (res/pollo/mariscos/cerdo/vegetal/mixto)
+- menu_diversity: score 1-10 de variedad de opciones (1=muy limitado, 10=muy variado)
+- Para cada platillo extraer:
+  - category_type: entrada|platillo|postre|bebida|otro
+  - price_num: precio como número (0 si no hay precio)
+  - protein_type: res|pollo|mariscos|cerdo|vegetal|ninguna
+  - cooking_method: parrilla|frito|vapor|crudo|horneado|otro
+  - is_premium: true si price_num > avg_platillos del menú
+
 MATCHING — normalización, contexto y estrategia:
 
 REGLA DE CONTEXTO (CRÍTICA para desambiguar):
@@ -159,7 +173,15 @@ CERO texto antes o después. CERO bloques de código. CERO explicaciones. SOLO e
     "menu_quality_note": "string",
     "top10_skus": [{"sku":"","material":"","brand":"","mentions":0,"priority":"P1","dishes":["platillo donde aparece"]}]
   },
-  "dishes": [{"name":"","category":"","price":"","ingredients":[{"name":"","implicit":false,"ambiguous":false}]}],
+  "price_analysis": {
+    "avg_entradas": 0,
+    "avg_platillos": 0,
+    "avg_postres": 0,
+    "price_tier": "economico|medio|premium",
+    "dominant_protein": "res|pollo|mariscos|cerdo|vegetal|mixto",
+    "menu_diversity": 0
+  },
+  "dishes": [{"name":"","category":"","category_type":"entrada|platillo|postre|bebida|otro","price":"","price_num":0,"description":"","ingredients":[{"name":"","implicit":false,"ambiguous":false}],"protein_type":"","cooking_method":"","is_premium":false}],
   "sku_table": [{"rank":1,"sku":"","material":"","brand":"","type":"","priority":"P1","mentions":0}],
   "matching_table": [{
     "ingredient":"","sku":"","material":"","brand":"","family":"","sales_line":"",
@@ -251,18 +273,24 @@ async function saveAnalysisToDB(analysisData, user) {
   if (!sb || !user) return null;
 
   const biz = analysisData.restaurant_name || analysisData.bizName;
+  const pa = analysisData.price_analysis || {};
 
-  // Upsert restaurant
+  // Upsert restaurant with intelligence fields
   const { data: rest, error: restErr } = await sb.from('restaurants').upsert({
     name: biz,
     city: analysisData.bizCity || null,
     food_type: analysisData.food_type || null,
-    maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(biz)}`
+    maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(biz)}`,
+    price_tier: pa.price_tier || null,
+    avg_price_entradas: pa.avg_entradas || null,
+    avg_price_platillos: pa.avg_platillos || null,
+    avg_price_postres: pa.avg_postres || null,
+    last_analyzed_at: new Date().toISOString(),
   }, { onConflict: 'name,city' }).select().single();
 
   if (restErr) console.warn('Restaurant upsert:', restErr.message);
 
-  // Insert analysis
+  // Insert analysis with full intelligence
   const { data: analysis, error: anaErr } = await sb.from('analyses').insert({
     user_id: user.id,
     restaurant_id: rest?.id || null,
@@ -271,21 +299,47 @@ async function saveAnalysisToDB(analysisData, user) {
     dish_count: analysisData.summary?.total_dishes || 0,
     sku_count: (analysisData.sku_table || []).length,
     avg_price: analysisData.avg_price || 0,
+    avg_price_entradas: pa.avg_entradas || 0,
+    avg_price_platillos: pa.avg_platillos || 0,
+    avg_price_postres: pa.avg_postres || 0,
+    price_tier: pa.price_tier || null,
+    dominant_protein: pa.dominant_protein || null,
+    menu_diversity: pa.menu_diversity || 0,
     raw_json: analysisData
   }).select().single();
 
   if (anaErr) { console.error('Analysis insert:', anaErr.message); return null; }
 
-  // Ingredients
-  const ings = (analysisData.matching_table || []).map(r => ({
-    analysis_id: analysis.id,
-    ingredient_name: r.ingredient,
-    priority: r.priority || 'P5',
-    match_type: r.match_type,
-    mentions: 1,
-    implicit: false,
-    ambiguous: (r.ingredient || '').includes('AMBIGUA')
-  }));
+  // Ingredients with dish intelligence
+  const ingMap = {};
+  (analysisData.dishes || []).forEach(d => {
+    (d.ingredients || []).forEach(ing => {
+      const key = (ing.name || '').toLowerCase();
+      if (!ingMap[key]) ingMap[key] = { dishes: [], prices: [], category: d.category_type };
+      ingMap[key].dishes.push(d.name);
+      if (d.price_num > 0) ingMap[key].prices.push(d.price_num);
+    });
+  });
+
+  const ings = (analysisData.matching_table || []).map((r, idx) => {
+    const key = (r.ingredient || '').toLowerCase();
+    const info = ingMap[key] || {};
+    const avgDishPrice = info.prices?.length
+      ? info.prices.reduce((s,p) => s+p, 0) / info.prices.length : 0;
+    return {
+      analysis_id: analysis.id,
+      ingredient_name: r.ingredient,
+      priority: r.priority || 'P5',
+      match_type: r.match_type,
+      mentions: 1,
+      implicit: false,
+      ambiguous: (r.ingredient || '').includes('AMBIGUA'),
+      dish_names: info.dishes || [],
+      avg_dish_price: avgDishPrice || null,
+      dish_category: info.category || null,
+      frequency_rank: idx + 1
+    };
+  });
   if (ings.length) await sb.from('ingredients').insert(ings);
 
   // SKU matches
@@ -296,11 +350,18 @@ async function saveAnalysisToDB(analysisData, user) {
   }));
   if (matches.length) await sb.from('sku_matches').insert(matches);
 
-  // Menu items
+  // Menu items with full intelligence
   const items = (analysisData.dishes || []).map(d => ({
     analysis_id: analysis.id,
-    name: d.name, category: d.category || null,
-    price: parseFloat(d.price) || null, description: d.description || null
+    name: d.name,
+    category: d.category || null,
+    category_type: d.category_type || 'otro',
+    price: d.price_num || null,
+    price_num: d.price_num || null,
+    description: d.description || null,
+    protein_type: d.protein_type || null,
+    cooking_method: d.cooking_method || null,
+    is_premium: d.is_premium || false
   }));
   if (items.length) await sb.from('menu_items').insert(items);
 
