@@ -1,44 +1,74 @@
 // ══════════════════════════════════════
-// supabase.js — cliente singleton
+// supabase.js — cliente + config desde API
 // ══════════════════════════════════════
 
-const SUPABASE_URL = localStorage.getItem('ml_supabase_url') || '';
-const SUPABASE_KEY = localStorage.getItem('ml_supabase_key') || '';
-
+let _config = null;
 let _supabase = null;
 
-function getSupabase() {
-  if (!_supabase && SUPABASE_URL && SUPABASE_KEY) {
-    _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// Carga la config desde /api/config (variables de entorno de Vercel)
+async function loadConfig() {
+  if (_config) return _config;
+  try {
+    const resp = await fetch('/api/config');
+    if (resp.ok) {
+      _config = await resp.json();
+      if (_config.supabaseUrl) localStorage.setItem('ml_supabase_url', _config.supabaseUrl);
+      if (_config.supabaseKey) localStorage.setItem('ml_supabase_key', _config.supabaseKey);
+      if (_config.companyName) localStorage.setItem('ml_company_name', _config.companyName);
+      if (_config.anthropicKey) localStorage.setItem('ml_anthropic_key', _config.anthropicKey);
+      return _config;
+    }
+  } catch(e) {
+    console.log('API config not available, using localStorage fallback');
+  }
+  // Fallback localStorage
+  _config = {
+    supabaseUrl:  localStorage.getItem('ml_supabase_url')  || '',
+    supabaseKey:  localStorage.getItem('ml_supabase_key')  || '',
+    companyName:  localStorage.getItem('ml_company_name')  || 'MenuLens',
+    anthropicKey: localStorage.getItem('ml_anthropic_key') || '',
+  };
+  return _config;
+}
+
+async function getSupabaseAsync() {
+  if (_supabase) return _supabase;
+  const cfg = await loadConfig();
+  if (cfg.supabaseUrl && cfg.supabaseKey) {
+    _supabase = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey);
   }
   return _supabase;
 }
 
-function reinitSupabase() {
-  const url = localStorage.getItem('ml_supabase_url') || '';
-  const key = localStorage.getItem('ml_supabase_key') || '';
+function getSupabase() {
+  if (_supabase) return _supabase;
+  const url = _config?.supabaseUrl || localStorage.getItem('ml_supabase_url') || '';
+  const key = _config?.supabaseKey || localStorage.getItem('ml_supabase_key') || '';
   if (url && key) {
     _supabase = window.supabase.createClient(url, key);
   }
   return _supabase;
 }
 
-// ── CONFIG HELPERS ────────────────────
+function reinitSupabase() {
+  _supabase = null;
+  _config = null;
+  return getSupabaseAsync();
+}
+
 const Config = {
-  get: (key) => localStorage.getItem('ml_' + key) || '',
-  set: (key, val) => { localStorage.setItem('ml_' + key, val); },
-  companyName: () => localStorage.getItem('ml_company_name') || 'MenuLens',
-  anthropicKey: () => localStorage.getItem('ml_anthropic_key') || '',
+  get: (key) => _config?.[key] || localStorage.getItem('ml_' + key) || '',
+  set: (key, val) => { localStorage.setItem('ml_' + key, val); if (_config) _config[key] = val; },
+  companyName: () => _config?.companyName || localStorage.getItem('ml_company_name') || 'MenuLens',
+  anthropicKey: () => _config?.anthropicKey || localStorage.getItem('ml_anthropic_key') || '',
 };
 
-// ── SESSION CACHE ─────────────────────
 let _currentUser = null;
 
 async function getCurrentUser() {
   if (_currentUser) return _currentUser;
-  const sb = getSupabase();
+  const sb = await getSupabaseAsync();
   if (!sb) {
-    // Demo mode
     const demo = sessionStorage.getItem('ml_demo_user');
     return demo ? JSON.parse(demo) : null;
   }
@@ -50,3 +80,6 @@ async function getCurrentUser() {
 }
 
 function clearUserCache() { _currentUser = null; }
+
+// Cargar config al arrancar
+loadConfig();

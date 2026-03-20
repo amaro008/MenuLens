@@ -94,11 +94,10 @@
 
     showLoading('Iniciando sesión…', '');
 
-    // Build supabase client fresh from localStorage every time
-    const sbUrl = localStorage.getItem('ml_supabase_url') || '';
-    const sbKey = localStorage.getItem('ml_supabase_key') || '';
+    // Load config from /api/config (Vercel env vars) with localStorage fallback
+    const cfg = await loadConfig();
 
-    if (!sbUrl || !sbKey) {
+    if (!cfg.supabaseUrl || !cfg.supabaseKey) {
       // DEMO MODE
       if (email === 'admin@demo.com' && pwd === 'admin123') {
         const user = { id: '1', email, name: 'Administrador', role: 'admin' };
@@ -117,8 +116,8 @@
       return;
     }
 
-    // SUPABASE MODE — create fresh client
-    const sb = window.supabase.createClient(sbUrl, sbKey);
+    // SUPABASE MODE — use config from API
+    const sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey);
 
     const { data, error } = await sb.auth.signInWithPassword({ email, password: pwd });
     if (error) {
