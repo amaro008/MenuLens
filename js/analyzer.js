@@ -65,7 +65,8 @@ MATCHING — normalización:
 - Empates: elegir mejor candidato + hasta 3 alternativas
 - Confianza Alta=match casi exacto, Media=variante, Baja=débil
 
-RESPONDE SOLO con este JSON válido, sin texto adicional ni bloques de código:
+INSTRUCCIÓN CRÍTICA: Tu respuesta debe comenzar EXACTAMENTE con el carácter { y terminar con }. 
+CERO texto antes o después. CERO bloques de código. CERO explicaciones. SOLO el JSON puro:
 {
   "restaurant_name": "string",
   "food_type": "string",
@@ -125,13 +126,44 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
   }
 
   const data = await resp.json();
-  const text = data.content[0].text.trim().replace(/```json|```/g, '').trim();
+  const raw = data.content[0].text.trim();
 
-  try {
-    return JSON.parse(text);
-  } catch(e) {
-    throw new Error('La IA devolvió un formato inesperado. Intenta de nuevo.');
+  // Try multiple extraction strategies
+  let parsed = null;
+
+  // Strategy 1: direct parse
+  try { parsed = JSON.parse(raw); } catch(e) {}
+
+  // Strategy 2: strip markdown code blocks
+  if (!parsed) {
+    try {
+      const stripped = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+      parsed = JSON.parse(stripped);
+    } catch(e) {}
   }
+
+  // Strategy 3: extract first { ... } block
+  if (!parsed) {
+    try {
+      const match = raw.match(/\{[\s\S]*\}/);
+      if (match) parsed = JSON.parse(match[0]);
+    } catch(e) {}
+  }
+
+  // Strategy 4: find JSON after any preamble text
+  if (!parsed) {
+    try {
+      const idx = raw.indexOf('{');
+      if (idx > -1) parsed = JSON.parse(raw.substring(idx));
+    } catch(e) {}
+  }
+
+  if (!parsed) {
+    console.error('Raw response:', raw.substring(0, 500));
+    throw new Error('La IA devolvió un formato inesperado. Intenta de nuevo con una imagen más clara.');
+  }
+
+  return parsed;
 }
 
 // ── SAVE TO DB ────────────────────────
