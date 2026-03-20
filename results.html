@@ -44,6 +44,7 @@
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn btn-yellow" id="btnExport" onclick="doExport()">📊 Exportar Excel</button>
               <button class="btn btn-outline btn-sm" onclick="doWhatsapp()">📤 WhatsApp</button>
+              <button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red-m)" onclick="doDelete()">🗑 Eliminar</button>
             </div>
           </div>
 
@@ -270,6 +271,44 @@ function switchTab(idx) {
 
 function doExport()   { exportExcel(_data); }
 function doWhatsapp() { shareWhatsapp(_data); }
+
+async function doDelete() {
+  const name = _data?.restaurant_name || _data?.bizName || 'este análisis';
+  if (!confirm(`¿Eliminar el análisis de "${name}"?\n\nEsta acción no se puede deshacer.`)) return;
+
+  const params = new URLSearchParams(window.location.search);
+  const analysisId = params.get('id');
+
+  if (!analysisId) {
+    // Only in session — just clear and redirect
+    sessionStorage.removeItem('ml_current_analysis');
+    toast('✅ Análisis eliminado', 'success');
+    setTimeout(() => window.location.href = 'history.html', 1000);
+    return;
+  }
+
+  const sb = getSupabase();
+  if (!sb) {
+    sessionStorage.removeItem('ml_current_analysis');
+    toast('✅ Análisis eliminado', 'success');
+    setTimeout(() => window.location.href = 'history.html', 1000);
+    return;
+  }
+
+  showLoading('Eliminando…', '');
+  try {
+    await sb.from('ingredients').delete().eq('analysis_id', analysisId);
+    await sb.from('sku_matches').delete().eq('analysis_id', analysisId);
+    await sb.from('menu_items').delete().eq('analysis_id', analysisId);
+    await sb.from('analyses').delete().eq('id', analysisId);
+    hideLoading();
+    toast('✅ Análisis eliminado', 'success');
+    setTimeout(() => window.location.href = 'history.html', 1000);
+  } catch(e) {
+    hideLoading();
+    toast('Error: ' + e.message, 'error');
+  }
+}
 </script>
 </body>
 </html>

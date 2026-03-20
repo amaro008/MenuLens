@@ -107,6 +107,28 @@
             </div>
           </div>
 
+          <!-- SKU KEYWORDS EDITOR -->
+          <div class="card">
+            <div class="card-body">
+              <div class="card-title">🏷️ Keywords por SKU</div>
+              <p style="font-size:12px;color:var(--text-m);margin-bottom:12px;line-height:1.6">
+                Agrega palabras clave a productos específicos para mejorar el matching. 
+                Ejemplo: el atún fresco debe tener keywords como <em>"atun fresco, filete, tostada"</em> 
+                para que Claude lo prefiera sobre el atún enlatado cuando el contexto sea un restaurante de mariscos.
+              </p>
+              <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+                <input class="form-input" id="kwSearch" placeholder="Buscar SKU o nombre de producto..." style="flex:1;min-width:200px" oninput="searchSkuKeywords()">
+                <button class="btn btn-outline btn-sm" onclick="exportCatalogWithKeywords()">↓ Exportar catálogo con keywords</button>
+              </div>
+              <div id="kwTable" style="max-height:320px;overflow-y:auto">
+                <div style="text-align:center;color:var(--text-l);padding:20px;font-size:13px">Carga el catálogo primero para ver los productos</div>
+              </div>
+              <div style="margin-top:10px;font-size:11px;color:var(--text-l)">
+                💡 También puedes agregar la columna <strong>Keywords</strong> directamente en tu Excel antes de cargarlo.
+              </div>
+            </div>
+          </div>
+
           <!-- PARAMS -->
           <div class="card">
             <div class="card-body">
@@ -147,6 +169,7 @@
   renderTopbar(user, true);
   renderSidebar(currentPage, user.role);
   loadCurrentValues();
+  initKeywordsEditor();
 })();
 
 function loadCurrentValues() {
@@ -215,11 +238,112 @@ function handleCatalog(input) {
 function saveParams() { toast('✅ Parámetros guardados', 'success'); }
 
 function updateTopbarLogo() {
-  // Re-render topbar with new logo
   const tb = document.getElementById('topbar');
   if (tb && typeof renderTopbar === 'function') {
     getCurrentUser().then(u => { if (u) renderTopbar(u, true); });
   }
+}
+
+// ── SKU KEYWORDS EDITOR ───────────────
+let kwCatalog = [];
+let kwFiltered = [];
+
+function initKeywordsEditor() {
+  const saved = localStorage.getItem('ml_catalog');
+  if (!saved) return;
+  try {
+    kwCatalog = JSON.parse(saved);
+    kwFiltered = [...kwCatalog];
+    renderKwTable(kwCatalog.slice(0, 50));
+  } catch(e) {}
+}
+
+function searchSkuKeywords() {
+  const q = document.getElementById('kwSearch').value.toLowerCase().trim();
+  if (!q) {
+    kwFiltered = [...kwCatalog];
+    renderKwTable(kwCatalog.slice(0, 50));
+    return;
+  }
+  kwFiltered = kwCatalog.filter(r => {
+    const mat = (r.Material || r.material || '').toLowerCase();
+    const sku = String(r.SKU || r.sku || '').toLowerCase();
+    const fam = (r.Familia || r.familia || '').toLowerCase();
+    const sub = (r['Sublínea'] || r.sublinea || '').toLowerCase();
+    const kw  = (r.Keywords || r.keywords || '').toLowerCase();
+    return mat.includes(q) || sku.includes(q) || fam.includes(q) || sub.includes(q) || kw.includes(q);
+  });
+  renderKwTable(kwFiltered.slice(0, 100));
+}
+
+function renderKwTable(items) {
+  if (!items.length) {
+    document.getElementById('kwTable').innerHTML = '<div style="text-align:center;color:var(--text-l);padding:16px;font-size:13px">Sin resultados</div>';
+    return;
+  }
+  const rows = items.map((r, idx) => {
+    const sku = r.SKU || r.sku || '';
+    const mat = r.Material || r.material || '';
+    const fam = r.Familia || r.familia || '';
+    const kw  = r.Keywords || r.keywords || '';
+    const realIdx = kwCatalog.indexOf(r);
+    return `<tr>
+      <td style="font-family:monospace;font-size:11px;color:var(--text-m);white-space:nowrap">${sku}</td>
+      <td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${mat}">${mat}</td>
+      <td><span class="badge badge-gray" style="font-size:10px">${fam}</span></td>
+      <td>
+        <input type="text" value="${kw}" 
+          placeholder="ej: atun fresco, filete, tostada"
+          style="width:100%;border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:12px;font-family:inherit;outline:none"
+          onfocus="this.style.borderColor='var(--red)'"
+          onblur="this.style.borderColor='var(--border)';saveKeyword(${realIdx}, this.value)"
+          onkeydown="if(event.key==='Enter')this.blur()">
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('kwTable').innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead>
+        <tr style="background:#FAFAFA">
+          <th style="padding:7px 10px;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-m);text-align:left;white-space:nowrap">SKU</th>
+          <th style="padding:7px 10px;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-m);text-align:left">Material</th>
+          <th style="padding:7px 10px;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-m);text-align:left">Familia</th>
+          <th style="padding:7px 10px;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-m);text-align:left">Keywords (editar y presionar Enter)</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function saveKeyword(idx, value) {
+  if (idx < 0 || idx >= kwCatalog.length) return;
+  kwCatalog[idx].Keywords = value;
+  // Persist to localStorage
+  localStorage.setItem('ml_catalog', JSON.stringify(kwCatalog));
+  toast('✅ Keyword guardada', 'success');
+}
+
+function exportCatalogWithKeywords() {
+  if (!kwCatalog.length) { toast('Carga el catálogo primero', 'error'); return; }
+  const wb = XLSX.utils.book_new();
+  const rows = [['Familia','Sublínea','Línea de Ventas','Marca','SKU','Material','Keywords']];
+  kwCatalog.forEach(r => {
+    rows.push([
+      r.Familia||r.familia||'',
+      r['Sublínea']||r.sublinea||'',
+      r['Línea de Ventas']||r.linea_ventas||'',
+      r.Marca||r.marca||'',
+      r.SKU||r.sku||'',
+      r.Material||r.material||'',
+      r.Keywords||r.keywords||''
+    ]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:22},{wch:16},{wch:20},{wch:16},{wch:12},{wch:42},{wch:40}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Catálogo');
+  XLSX.writeFile(wb, 'MenuLens_Catalogo_Keywords_' + new Date().toISOString().split('T')[0] + '.xlsx');
+  toast('✅ Catálogo exportado con keywords', 'success');
 }
 </script>
 </body>

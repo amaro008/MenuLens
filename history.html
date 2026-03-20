@@ -110,10 +110,47 @@ function renderTable(data) {
       <td>${a.dish_count || '—'}</td>
       <td>${a.sku_count || '—'}</td>
       <td><span class="badge ${a.status === 'complete' ? 'badge-green' : 'badge-yellow'}">${a.status === 'complete' ? 'Completo' : 'En proceso'}</span></td>
-      <td><a href="results.html?id=${a.id}" class="btn btn-outline btn-xs">Ver</a></td>
+      <td style="display:flex;gap:4px">
+        <a href="results.html?id=${a.id}" class="btn btn-outline btn-xs">Ver</a>
+        <button class="btn btn-xs" style="background:var(--red-l);color:var(--red);border:1px solid var(--red-m)" onclick="confirmDelete('${a.id}', '${(a.restaurants?.name||'').replace(/'/g,"\'")}')">🗑</button>
+      </td>
     </tr>`).join('');
   document.getElementById('histBody').innerHTML = rows ||
     `<tr><td colspan="8" style="text-align:center;color:var(--text-l);padding:32px">Sin resultados</td></tr>`;
+}
+
+// ── DELETE ANALYSIS ───────────────────
+function confirmDelete(id, name) {
+  if (!confirm(`¿Eliminar el análisis de "${name}"?
+
+Esta acción no se puede deshacer.`)) return;
+  deleteAnalysis(id);
+}
+
+async function deleteAnalysis(id) {
+  const sb = getSupabase();
+  if (!sb) {
+    // Demo mode — remove from local array
+    _allData = _allData.filter(a => a.id !== id);
+    renderTable(_allData);
+    toast('✅ Análisis eliminado', 'success');
+    return;
+  }
+  showLoading('Eliminando análisis…', '');
+  try {
+    // Delete related records first (FK constraints)
+    await sb.from('ingredients').delete().eq('analysis_id', id);
+    await sb.from('sku_matches').delete().eq('analysis_id', id);
+    await sb.from('menu_items').delete().eq('analysis_id', id);
+    await sb.from('analyses').delete().eq('id', id);
+    hideLoading();
+    _allData = _allData.filter(a => a.id !== id);
+    renderTable(_allData);
+    toast('✅ Análisis eliminado', 'success');
+  } catch(e) {
+    hideLoading();
+    toast('Error al eliminar: ' + e.message, 'error');
+  }
 }
 
 function filterTable() {
