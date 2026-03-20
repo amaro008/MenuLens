@@ -51,11 +51,146 @@
           <div class="card">
             <div class="card-body">
               <div class="card-title">2 · Sube el menú</div>
-              <div class="upload-zone" id="uploadZone">
-                <input type="file" id="fileInput" accept=".pdf,image/*" multiple onchange="handleFiles(this.files)" style="z-index:2">
+
+            </div>
+          </div>
+
+          <!-- CATALOG STATUS -->
+          <div id="catalogWarning" style="display:none">
+            <div style="background:var(--yellow-l);border:1px solid #FDE047;border-radius:var(--r-s);padding:10px 14px;font-size:12px;color:#92610A;display:flex;align-items:center;gap:8px">
+              ⚠️ Sin catálogo de SKUs cargado. El análisis funcionará pero no habrá matching. <a href="admin-config.html" style="color:var(--red);font-weight:600">Cargar catálogo →</a>
+            </div>
+          </div>
+
+          <!-- ANALYZE BTN -->
+          <button class="btn btn-primary btn-block" style="padding:13px;font-size:15px" id="analyzeBtn" disabled onclick="startAnalysis()">
+            ✨ Analizar menú con IA
+          </button>
+          <div style="text-align:center;font-size:12px;color:var(--text-l)">Los resultados estarán listos en segundos</div>
+
+          <!-- DEBUG PANEL — visible durante análisis -->
+          <div id="debugPanel" style="display:none;background:#1a1a1a;color:#00ff88;font-family:monospace;font-size:11px;border-radius:8px;padding:12px;max-height:200px;overflow-y:auto;line-height:1.8"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/supabase.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/analyzer.js"></script>
+<script src="js/export.js"></script>
+
+<script>
+let _user = null;
+let _fileBase64 = null;
+let _fileType = null;
+let _file = null;
+
+(async () => {
+  _user = await requireAuth();
+  if (!_user) return;
+  renderTopbar(_user, false);
+  renderSidebar(currentPage, _user.role);
+
+  // Show advisor code banner if user has advisor_code
+  if (_user.advisor_code || _user.code) {
+    const banner = document.getElementById('advisorCodeBanner');
+    if (banner) {
+      banner.style.display = 'block';
+      document.getElementById('advisorName').textContent = _user.name || _user.email;
+      document.getElementById('advisorCode').textContent = _user.advisor_code || _user.code || '—';
+    }
+  }
+
+  // Load catalog
+  loadCatalogFromStorage();
+  if (!catalogData.length) {
+    document.getElementById('catalogWarning').style.display = 'block';
+  }
+
+  // Check Anthropic key
+  if (!Config.anthropicKey()) {
+    toast('⚠️ Configura el Anthropic API Key en el panel de admin', '');
+  }
+})();
+
+// ── FILE HANDLING ─────────────────────
+function checkBtn() {
+  const name = document.getElementById('bizName')?.value.trim();
+  const client = document.getElementById('bizClientNum')?.value.trim();
+  document.getElementById('analyzeBtn').disabled = !_fileBase64 || !name || !client;
+}
+
+// Drag & drop on upload zone
+document.addEventListener('DOMContentLoaded', () => {
+  const dz = document.getElementById('uploadZone');
+  if (!dz) return;
+  dz.addEventListener('dragover',  e => { e.preventDefault(); e.stopPropagation(); dz.classList.add('drag'); });
+  dz.addEventListener('dragleave', e => { e.preventDefault(); dz.classList.remove('drag'); });
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); e.stopPropagation(); dz.classList.remove('drag');
+    if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+  });
+});DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>MenuLens — Nuevo análisis</title>
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/components.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div id="app">
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+    <div class="loading-title" id="loadingTitle">Analizando menú…</div>
+    <div class="loading-step"  id="loadingStep">Procesando con IA…</div>
+  </div>
+  <div id="toast"></div>
+  <div class="topbar" id="topbar"></div>
+  <div class="topbar-accent"></div>
+  <div class="layout">
+    <div class="sidebar" id="sidebar"></div>
+    <div class="main-content">
+      <div class="scrollable">
+        <div class="content">
+          <div class="page-header">
+            <div>
+              <div class="page-title">Nuevo análisis</div>
+              <div class="page-sub">Sube el menú del restaurante para comenzar</div>
+            </div>
+          </div>
+
+          <!-- STEP 1 -->
+          <div class="card">
+            <div class="card-body">
+              <div class="card-title">1 · Datos del restaurante</div>
+              <div class="form-row" style="margin-bottom:12px">
+                <div class="form-group">
+                  <label class="form-label">Nombre comercial <span style="color:var(--red)">*</span></label>
+                  <input class="form-input" id="bizName" placeholder="Ej: Mr. Ribs Bar & Grill" oninput="checkBtn()">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Número de cliente <span style="color:var(--red)">*</span></label>
+                  <input class="form-input" id="bizClientNum" placeholder="Ej: CLI-00234" oninput="checkBtn()">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- STEP 2 -->
+          <div class="card">
+            <div class="card-body">
+              <div class="card-title">2 · Sube el menú</div>
+              <!-- Upload zone — click triggers hidden input -->
+              <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
                 <div class="upload-icon">📄</div>
-                <div class="upload-title">Arrastra o haz clic para subir</div>
-                <div class="upload-sub">PDF o imágenes · múltiples archivos · máx 4MB c/u</div>
+                <div class="upload-title">Haz clic aquí para subir</div>
+                <div class="upload-sub">PDF o imágenes · múltiples archivos · máx 4MB c/u · o arrastra aquí</div>
                 <div class="upload-types">
                   <span class="type-tag">PDF</span>
                   <span class="type-tag">JPG</span>
@@ -63,6 +198,8 @@
                   <span class="type-tag">WEBP</span>
                 </div>
               </div>
+              <!-- Hidden file input outside the zone to avoid event conflicts -->
+              <input type="file" id="fileInput" accept=".pdf,image/*" multiple style="display:none" onchange="handleFiles(this.files)">
 
               <!-- Multi-file list -->
               <div id="fileList" style="margin-top:10px;display:flex;flex-direction:column;gap:6px"></div>
@@ -203,13 +340,7 @@ function checkBtn() {
 }
 
 // Drag & drop + click fallback
-const dz = document.getElementById('uploadZone');
-dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag'); });
-dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
-dz.addEventListener('drop', e => {
-  e.preventDefault(); dz.classList.remove('drag');
-  if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
-});
+// drag/drop handled by DOMContentLoaded listener above
 // Click fallback — in case input isn't covering the whole zone
 dz.addEventListener('click', e => {
   if (e.target !== document.getElementById('fileInput')) {
