@@ -1,9 +1,6 @@
 // api/analyze.js — Proxy serverless para Claude API
-// El browser no puede llamar a Anthropic directamente (CORS)
-// Esta función corre en Vercel server-side y hace el puente
-
 export const config = {
-  api: { bodyParser: { sizeLimit: '20mb' } }
+  api: { bodyParser: { sizeLimit: '25mb' } }
 };
 
 export default async function handler(req, res) {
@@ -13,11 +10,22 @@ export default async function handler(req, res) {
 
   const apiKey = process.env.ANTHROPIC_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: 'ANTHROPIC_KEY not configured in Vercel environment variables' });
+    return res.status(500).json({ error: 'ANTHROPIC_KEY not configured in Vercel' });
   }
 
   try {
     const { model, max_tokens, system, messages } = req.body;
+
+    // Log prompt size for debugging
+    const systemSize = system ? system.length : 0;
+    const approxTokens = Math.round(systemSize / 4);
+    console.log(`[analyze] model:${model} system:~${approxTokens}tok max_tokens:${max_tokens}`);
+
+    if (approxTokens > 150000) {
+      return res.status(400).json({ 
+        error: `System prompt demasiado grande (~${approxTokens} tokens). Reduce el catálogo.` 
+      });
+    }
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -32,13 +40,18 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (!response.ok) {
-      return res.status(response.status).json({ error: data.error?.message || 'Anthropic API error' });
+      console.error('[analyze] Anthropic error:', data.error);
+      return res.status(response.status).json({ 
+        error: data.error?.message || 'Anthropic API error',
+        type: data.error?.type || 'unknown'
+      });
     }
 
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json(data);
 
   } catch (e) {
-    return res.status(500).json({ error: 'Proxy error: ' + e.message });
+    console.error('[analyze] Exception:', e.message);
+    return res.status(500).json({ error: e.message });
   }
 }
