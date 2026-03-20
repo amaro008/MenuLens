@@ -121,9 +121,25 @@
       toast('Credenciales incorrectas', 'error');
       return;
     }
-    const { data: profile } = await sb.from('users').select('role').eq('id', data.user.id).single();
+    // Retry up to 3 times — trigger may take a moment to create the profile
+    let profile = null;
+    for (let i = 0; i < 3; i++) {
+      const { data: p } = await sb.from('users').select('role').eq('id', data.user.id).single();
+      if (p) { profile = p; break; }
+      await new Promise(r => setTimeout(r, 800));
+    }
+    // If profile still missing, insert it now
+    if (!profile) {
+      await sb.from('users').insert({
+        id: data.user.id,
+        email: data.user.email,
+        name: data.user.email.split('@')[0],
+        role: 'advisor'
+      });
+      profile = { role: 'advisor' };
+    }
     hideLoading();
-    const role = profile?.role || 'advisor';
+    const role = profile.role || 'advisor';
     window.location.href = ['admin', 'supervisor'].includes(role) ? 'admin-kpi.html' : 'dashboard.html';
   }
 
