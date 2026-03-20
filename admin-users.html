@@ -185,22 +185,56 @@ async function saveUser() {
   const pwd   = document.getElementById('uPassword').value;
   const role  = document.getElementById('uRole').value;
   if (!name || !email) { toast('Nombre y correo son requeridos', 'error'); return; }
-
-  const sb = getSupabase();
-  if (!sb) { toast('Configura Supabase primero', 'error'); return; }
   if (!pwd || pwd.length < 8) { toast('La contraseña debe tener mínimo 8 caracteres', 'error'); return; }
 
   showLoading('Creando usuario…', '');
-  const { data: authData, error } = await sb.auth.admin.createUser({
-    email, password: pwd, email_confirm: true,
-    user_metadata: { name, role }
-  });
-  if (error) { hideLoading(); toast('Error: ' + error.message, 'error'); return; }
-  // Profile is auto-created by DB trigger
-  hideLoading();
-  closeModal('modalUser');
-  toast('✅ Usuario creado exitosamente', 'success');
-  loadUsers();
+
+  try {
+    // Load config to get service key
+    const cfg = await loadConfig();
+    if (!cfg.supabaseServiceKey) {
+      hideLoading();
+      toast('Configura SUPABASE_SERVICE_KEY en Vercel', 'error');
+      return;
+    }
+
+    // Use service role client to create user (bypasses auth restrictions)
+    const adminSb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    });
+
+    // Create auth user
+    const { data: authData, error: authErr } = await adminSb.auth.admin.createUser({
+      email,
+      password: pwd,
+      email_confirm: true,
+      user_metadata: { name, role }
+    });
+
+    if (authErr) {
+      hideLoading();
+      toast('Error al crear usuario: ' + authErr.message, 'error');
+      return;
+    }
+
+    // Upsert profile in public.users (trigger may or may not fire)
+    await adminSb.from('users').upsert({
+      id: authData.user.id,
+      email,
+      name,
+      role,
+      active: true
+    });
+
+    hideLoading();
+    closeModal('modalUser');
+    toast('✅ Usuario ' + name + ' creado exitosamente', 'success');
+    loadUsers();
+
+  } catch(e) {
+    hideLoading();
+    toast('Error: ' + e.message, 'error');
+  }
 }
 
 function savePerms() { toast('✅ Permisos guardados', 'success'); }
