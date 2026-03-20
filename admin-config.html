@@ -228,11 +228,66 @@ async function testAnthropic() {
   } catch(e) { hideLoading(); toast('Error de conexión: ' + e.message, 'error'); }
 }
 
-function handleCatalog(input) {
-  uploadCatalog(input, (rows, name) => {
-    document.getElementById('catalogFile').textContent = name;
-    document.getElementById('catalogMeta').textContent = rows.length + ' productos · ' + new Date().toLocaleDateString('es');
-  });
+async function handleCatalog(input) {
+  const file = input.files[0];
+  if (!file) return;
+  showLoading('Cargando catálogo...', 'Leyendo archivo Excel...');
+
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+      if (!rows.length) { hideLoading(); toast('El archivo está vacío', 'error'); return; }
+
+      const cols = Object.keys(rows[0]);
+      if (!cols.some(c => c.toLowerCase() === 'sku') || !cols.some(c => c.toLowerCase() === 'material')) {
+        hideLoading(); toast('El archivo debe tener columnas SKU y Material', 'error'); return;
+      }
+
+      setLoadingStep(`Subiendo ${rows.length} productos a Supabase...`);
+
+      // Upload to Supabase via API
+      const resp = await fetch('/api/upload-catalog', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ products: rows, company: 'default' })
+      });
+
+      const result = await resp.json();
+
+      if (!resp.ok) {
+        hideLoading();
+        toast('Error al subir catálogo: ' + (result.error || resp.status), 'error');
+        return;
+      }
+
+      // Also save to localStorage as fallback cache
+      const PRIO_FAM = ['RES','AVES','PESCADOS Y MARISCOS','CERDO','CARNES FRIAS',
+        'CORDERO Y OTROS','QUESOS','CREMAS','MNTQUILLAS Y MARGARI',
+        'PANES Y PASTELES','FRUTAS Y VERDURAS'];
+      const _norm = s => (s||'').toString().trim().toUpperCase();
+      const _prio = rows.filter(r => PRIO_FAM.includes(_norm(r.Familia||r.familia)));
+      const _rest = rows.filter(r => !PRIO_FAM.includes(_norm(r.Familia||r.familia)));
+      localStorage.setItem('ml_catalog', JSON.stringify([..._prio, ..._rest].slice(0, 1500)));
+      localStorage.setItem('ml_catalog_total', rows.length);
+      localStorage.setItem('ml_catalog_name', file.name);
+      localStorage.setItem('ml_catalog_date', new Date().toLocaleDateString('es'));
+
+      hideLoading();
+      document.getElementById('catalogFile').textContent = file.name;
+      document.getElementById('catalogMeta').textContent =
+        `${result.inserted} productos guardados en Supabase · ${new Date().toLocaleDateString('es')}`;
+      toast(`✅ Catálogo guardado: ${result.inserted} productos en Supabase`, 'success');
+
+    } catch(err) {
+      hideLoading();
+      toast('Error al procesar el archivo: ' + err.message, 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
 }
 
 function saveParams() { toast('✅ Parámetros guardados', 'success'); }

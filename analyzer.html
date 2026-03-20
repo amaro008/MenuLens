@@ -305,7 +305,21 @@ function geolocate() {
 // ── ANALYSIS ──────────────────────────
 async function startAnalysis() {
   if (!_fileBase64) { toast('Sube un menú primero', 'error'); return; }
-  if (!Config.anthropicKey()) { toast('Configura el Anthropic API Key en el panel admin', 'error'); return; }
+
+  // Reset debug log
+  try { sessionStorage.removeItem('ml_debug_log'); } catch(e) {}
+  const dp = document.getElementById('debugPanel');
+  if (dp) { dp.innerHTML = ''; dp.style.display = 'none'; }
+
+  // Load catalog from Supabase (with localStorage fallback)
+  showLoading('Cargando catálogo...', 'Consultando base de datos...');
+  await loadCatalogFromSupabase();
+  hideLoading();
+
+  if (!catalogData.length) {
+    toast('Sin catálogo de SKUs. Cárgalo en Admin → Configuración', 'error');
+    return;
+  }
 
   const bizClientNum = document.getElementById('bizClientNum')?.value.trim() || '';
   const bizName = document.getElementById('bizName').value.trim() || 'Restaurante';
