@@ -134,6 +134,12 @@
             </div>
           </div>
 
+          <!-- DEBUG LOG PANEL -->
+          <div id="debugPanel" style="display:none;background:#1a1a1a;color:#00ff88;font-family:monospace;font-size:11px;border-radius:8px;padding:12px;max-height:220px;overflow-y:auto;line-height:1.8">
+            <div style="color:#888;margin-bottom:6px;font-size:10px">── Log de análisis ──</div>
+          </div>
+          <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="toggleDebugPanel()">🔍 Ver log de análisis</button>
+
           <a href="analyzer.html" class="btn btn-outline btn-sm">← Nuevo análisis</a>
         </div>
       </div>
@@ -314,6 +320,36 @@ function switchTab(idx) {
 
 function doExport()   { exportExcel(_data); }
 function doWhatsapp() { shareWhatsapp(_data); }
+
+// ── DEBUG ──────────────────────────────
+function toggleDebugPanel() {
+  const panel = document.getElementById('debugPanel');
+  if (!panel) return;
+  if (panel.style.display === 'none') {
+    loadDebugLog();
+    panel.style.display = 'block';
+  } else {
+    panel.style.display = 'none';
+  }
+}
+
+function loadDebugLog() {
+  const panel = document.getElementById('debugPanel');
+  if (!panel) return;
+  try {
+    const logs = JSON.parse(sessionStorage.getItem('ml_debug_log') || '[]');
+    if (!logs.length) {
+      panel.innerHTML = '<div style="color:#888">Sin logs disponibles</div>';
+      return;
+    }
+    const colors = { info: '#00ff88', warn: '#ffcc00', error: '#ff4444' };
+    panel.innerHTML = '<div style="color:#888;margin-bottom:6px;font-size:10px">── Log de análisis ──</div>' +
+      logs.map(l => `<div style="color:${colors[l.type]||'#00ff88'}">[${l.ts}] ► ${l.msg}</div>`).join('');
+    panel.scrollTop = panel.scrollHeight;
+  } catch(e) {
+    panel.innerHTML = '<div style="color:#ff4444">Error al cargar logs</div>';
+  }
+}
 
 async function doDelete() {
   const name = _data?.restaurant_name || _data?.bizName || 'este análisis';

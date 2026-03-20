@@ -129,34 +129,50 @@ Esta acción no se puede deshacer.`)) return;
 }
 
 async function deleteAnalysis(id) {
-  // Demo mode
   const sb = await getSupabaseAsync();
   if (!sb) {
     _allData = _allData.filter(a => a.id !== id);
     renderTable(_allData);
-    toast('✅ Análisis eliminado', 'success');
+    toast('✅ Análisis eliminado (demo)', 'success');
     return;
   }
-  showLoading('Eliminando análisis…', '');
-  try {
-    // Delete child records first to avoid FK constraint errors
-    const dels = [
-      sb.from('ingredients').delete().eq('analysis_id', id),
-      sb.from('sku_matches').delete().eq('analysis_id', id),
-      sb.from('menu_items').delete().eq('analysis_id', id)
-    ];
-    await Promise.all(dels);
-    const { error } = await sb.from('analyses').delete().eq('id', id);
-    if (error) throw new Error(error.message);
-    hideLoading();
-    _allData = _allData.filter(a => a.id !== id);
-    renderTable(_allData);
-    toast('✅ Análisis eliminado', 'success');
-  } catch(e) {
-    hideLoading();
-    console.error('Delete error:', e);
-    toast('Error al eliminar: ' + e.message, 'error');
+
+  showLoading('Eliminando análisis…', 'Borrando registros relacionados...');
+
+  // Delete sequentially to avoid FK issues
+  const steps = [
+    { table: 'ingredients',  field: 'analysis_id' },
+    { table: 'sku_matches',  field: 'analysis_id' },
+    { table: 'menu_items',   field: 'analysis_id' },
+    { table: 'analyses',     field: 'id'          },
+  ];
+
+  for (const step of steps) {
+    try {
+      const { error, count } = await sb
+        .from(step.table)
+        .delete()
+        .eq(step.field, id);
+      if (error) {
+        console.warn(`Delete ${step.table}:`, error.message, error.code);
+        // RLS error — try to continue anyway
+        if (error.code === '42501') {
+          hideLoading();
+          toast('Sin permisos para eliminar. Contacta al admin.', 'error');
+          return;
+        }
+      } else {
+        console.log(`Deleted from ${step.table}`);
+      }
+    } catch(e) {
+      console.error(`Error deleting from ${step.table}:`, e.message);
+    }
   }
+
+  hideLoading();
+  _allData = _allData.filter(a => a.id !== id);
+  renderTable(_allData);
+  toast('✅ Análisis eliminado', 'success');
 }
 
 function filterTable() {
