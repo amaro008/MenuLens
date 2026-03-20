@@ -1,8 +1,6 @@
-// api/upload-catalog.js — recibe el catálogo Excel parseado y lo guarda en Supabase
-import { createClient } from '@supabase/supabase-js';
-
+// api/upload-catalog.js — sube catálogo a Supabase via REST API (sin npm imports)
 export const config = {
-  api: { bodyParser: { sizeLimit: '10mb' } }
+  api: { bodyParser: { sizeLimit: '15mb' } }
 };
 
 export default async function handler(req, res) {
@@ -11,30 +9,44 @@ export default async function handler(req, res) {
   }
 
   const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+  const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
-    return res.status(500).json({ error: 'Supabase service key not configured' });
+    return res.status(500).json({ error: 'Supabase not configured' });
   }
 
-  const { products, company } = req.body;
+  const { products, company = 'default' } = req.body;
   if (!products || !Array.isArray(products)) {
     return res.status(400).json({ error: 'products array required' });
   }
 
-  const sb = createClient(supabaseUrl, supabaseKey);
+  const headers = {
+    'Content-Type': 'application/json',
+    'apikey': supabaseKey,
+    'Authorization': `Bearer ${supabaseKey}`,
+    'Prefer': 'return=minimal'
+  };
+
+  const base = `${supabaseUrl}/rest/v1`;
 
   try {
-    // Delete existing catalog for this company
-    await sb.from('sku_catalog').delete().eq('company', company || 'default');
+    // Step 1: Delete existing catalog for this company
+    const delResp = await fetch(`${base}/sku_catalog?company=eq.${encodeURIComponent(company)}`, {
+      method: 'DELETE',
+      headers
+    });
+    if (!delResp.ok && delResp.status !== 404) {
+      const errText = await delResp.text();
+      console.warn('Delete warning:', errText);
+    }
 
-    // Insert in batches of 500
+    // Step 2: Insert in batches of 500
     const BATCH = 500;
     let inserted = 0;
 
     for (let i = 0; i < products.length; i += BATCH) {
       const batch = products.slice(i, i + BATCH).map(p => ({
-        company:      company || 'default',
+        company,
         familia:      (p.Familia      || p.familia      || '').toString().trim().toUpperCase(),
         sublinea:     (p['Sublínea']  || p.sublinea     || '').toString().trim(),
         linea_ventas: (p['Línea de Ventas'] || p.linea_ventas || '').toString().trim(),
@@ -43,20 +55,27 @@ export default async function handler(req, res) {
         material:     (p.Material     || p.material     || '').toString().trim(),
         keywords:     (p.Keywords     || p.keywords     || '').toString().trim(),
         active:       true
-      })).filter(p => p.sku && p.material); // require sku and material
+      })).filter(p => p.sku && p.material);
 
-      const { error } = await sb.from('sku_catalog').insert(batch);
-      if (error) throw new Error(`Batch ${i/BATCH + 1}: ${error.message}`);
+      const insertResp = await fetch(`${base}/sku_catalog`, {
+        method: 'POST',
+        headers: { ...headers, 'Prefer': 'return=minimal' },
+        body: JSON.stringify(batch)
+      });
+
+      if (!insertResp.ok) {
+        const errText = await insertResp.text();
+        throw new Error(`Batch ${Math.floor(i/BATCH)+1} failed: ${errText.substring(0, 200)}`);
+      }
+
       inserted += batch.length;
+      console.log(`Inserted batch ${Math.floor(i/BATCH)+1}: ${inserted}/${products.length}`);
     }
 
-    return res.status(200).json({
-      success: true,
-      inserted,
-      total: products.length
-    });
+    return res.status(200).json({ success: true, inserted, total: products.length });
 
   } catch(e) {
+    console.error('Upload catalog error:', e.message);
     return res.status(500).json({ error: e.message });
   }
 }
