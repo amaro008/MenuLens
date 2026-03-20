@@ -47,12 +47,14 @@ vegetales o frutas identificables, salsas explícitas, condimentos relevantes
 
 NO incluir: adjetivos, técnicas de cocción, sensaciones, "salsa de la casa"
 
-PRIORIDAD COMERCIAL:
-P1: Proteínas premium (ribeye, new york, filetes, mariscos, costillas)
-P2: Proteínas generales (res, pollo, cerdo, pescado)
-P3: Carnes frías/embutidos
+PRIORIDAD COMERCIAL (MUY IMPORTANTE — define el orden de todo):
+P1: Proteínas premium (ribeye, new york, filetes, mariscos, costillas, langosta, pulpo, camarón, arrachera)
+P2: Proteínas generales (res, pollo, cerdo, pescado, atún)
+P3: Carnes frías/embutidos (chorizo, jamón, salchicha, tocino)
 P4: Quesos y lácteos
-P5: Resto
+P5: Resto (salsas, condimentos, mieles, bebidas, aceites, etc.)
+
+REGLA CRÍTICA PARA TOP 10: El top10_skus DEBE ordenarse PRIMERO por prioridad (P1 antes que P2, P2 antes que P3, etc.) y SOLO usar menciones como desempate entre productos de la MISMA prioridad. Un producto P1 con 1 mención SIEMPRE va antes que un producto P5 con 10 menciones. Las proteínas premium SIEMPRE lideran el top 10.
 
 TIPOS DE COMIDA — elige el más cercano:
 Mexicana, Italiana, Americana, Mariscos, Asiática, Mediterránea,
@@ -64,6 +66,14 @@ MATCHING — normalización:
 - "queso manchego" → buscar "manchego" en Material
 - Empates: elegir mejor candidato + hasta 3 alternativas
 - Confianza Alta=match casi exacto, Media=variante, Baja=débil
+
+REGLA TOP 10 — ORDEN OBLIGATORIO:
+1. Agrupa todos los matches por prioridad
+2. Dentro de P1: ordena por menciones desc
+3. Luego P2 por menciones, luego P3, P4, P5
+4. NUNCA un P5 aparece antes que un P1 en el top10
+5. Si hay menos de 10 productos P1+P2, completa con P3, P4, P5
+6. El top10 refleja OPORTUNIDAD COMERCIAL, no frecuencia de texto
 
 INSTRUCCIÓN CRÍTICA: Tu respuesta debe comenzar EXACTAMENTE con el carácter { y terminar con }. 
 CERO texto antes o después. CERO bloques de código. CERO explicaciones. SOLO el JSON puro:
@@ -78,7 +88,7 @@ CERO texto antes o después. CERO bloques de código. CERO explicaciones. SOLO e
     "not_found": 0,
     "key_findings": ["max 3 hallazgos"],
     "menu_quality_note": "string",
-    "top10_skus": [{"sku":"","material":"","brand":"","mentions":0}]
+    "top10_skus": [{"sku":"","material":"","brand":"","mentions":0,"priority":"P1","dishes":["platillo donde aparece"]}]
   },
   "dishes": [{"name":"","category":"","price":"","ingredients":[{"name":"","implicit":false,"ambiguous":false}]}],
   "sku_table": [{"rank":1,"sku":"","material":"","brand":"","type":"","priority":"P1","mentions":0}],

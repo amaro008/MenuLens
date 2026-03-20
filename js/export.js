@@ -32,9 +32,11 @@ function exportExcel(data) {
     [s.menu_quality_note || ''],
     [''],
     ['── TOP 10 SKUs ──'],
-    ['#', 'SKU', 'Material', 'Marca', 'Menciones'],
+    ['#', 'SKU', 'Material', 'Marca', 'Prioridad', 'Menciones', 'Platillos donde aparece'],
     ...(s.top10_skus || []).map((r, i) => [
-      i + 1, r.sku || '', r.material || '', r.brand || '', r.mentions || 0
+      i + 1, r.sku || '', r.material || '', r.brand || '',
+      r.priority || '', r.mentions || 0,
+      (r.dishes || []).join(', ')
     ]),
     [''],
     ['── GAPS DEL CATÁLOGO ──'],
