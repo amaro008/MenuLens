@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MenuLens — Generador de Keywords</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#F3F4F6;color:#111827;min-height:100vh}
+.header{background:#C8102E;padding:16px 24px;display:flex;align-items:center;gap:12px}
+.header-icon{background:white;border-radius:6px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#C8102E}
+.header-title{color:white;font-size:18px;font-weight:700}
+.header-title span{color:#F5C300}
+.accent{height:3px;background:#F5C300}
+.main{max-width:860px;margin:0 auto;padding:28px 16px;display:flex;flex-direction:column;gap:20px}
+.card{background:white;border-radius:10px;border:1px solid #E5E7EB;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.card-title{font-size:14px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:7px}
+.form-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:#6B7280;margin-bottom:5px;display:block}
+.form-input{width:100%;border:1px solid #D1D5DB;border-radius:6px;padding:8px 11px;font-size:13px;outline:none;transition:border .15s}
+.form-input:focus{border-color:#C8102E;box-shadow:0 0 0 3px rgba(200,16,46,.08)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s}
+.btn-primary{background:#C8102E;color:white}
+.btn-primary:hover:not(:disabled){background:#9B0C22}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed}
+.btn-outline{background:white;color:#111827;border:1px solid #E5E7EB}
+.btn-outline:hover{border-color:#C8102E;color:#C8102E}
+.btn-green{background:#16A34A;color:white}
+.btn-green:hover{background:#15803D}
+.btn-block{width:100%;justify-content:center;padding:12px}
+.upload-zone{border:2px dashed #D1D5DB;border-radius:10px;padding:32px;text-align:center;cursor:pointer;transition:all .2s;background:#FAFAFA;position:relative}
+.upload-zone:hover,.upload-zone.drag{border-color:#C8102E;background:#FDECEA}
+.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.progress-wrap{background:#F3F4F6;border-radius:8px;overflow:hidden;height:10px;margin-top:8px}
+.progress-bar{height:100%;background:#C8102E;border-radius:8px;transition:width .3s ease}
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
+.badge-red{background:#FDECEA;color:#C8102E}
+.badge-green{background:#DCFCE7;color:#16A34A}
+.badge-yellow{background:#FFFBE6;color:#92610A}
+.badge-gray{background:#F3F4F6;color:#6B7280}
+.log{background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:12px;font-family:monospace;font-size:12px;height:200px;overflow-y:auto;line-height:1.7}
+.log-line{padding:1px 0}
+.log-ok{color:#16A34A}
+.log-err{color:#C8102E}
+.log-info{color:#6B7280}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.stat{background:#F3F4F6;border-radius:8px;padding:12px;text-align:center}
+.stat-num{font-size:24px;font-weight:700;color:#C8102E}
+.stat-label{font-size:11px;color:#6B7280;margin-top:2px}
+.preview-table{width:100%;border-collapse:collapse;font-size:12px}
+.preview-table th{text-align:left;padding:7px 10px;background:#F9FAFB;border-bottom:1px solid #E5E7EB;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#6B7280}
+.preview-table td{padding:8px 10px;border-bottom:1px solid #F3F4F6;vertical-align:top}
+.preview-table tr:hover td{background:#FAFAFA}
+.kw-cell{color:#16A34A;font-style:italic}
+.step{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #F3F4F6;font-size:13px}
+.step:last-child{border-bottom:none}
+.step-num{width:24px;height:24px;border-radius:50%;background:#FDECEA;color:#C8102E;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.step-num.done{background:#DCFCE7;color:#16A34A}
+.step-num.active{background:#C8102E;color:white}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-icon">M</div>
+  <div class="header-title">Menu<span>Lens</span> — Generador de Keywords</div>
+</div>
+<div class="accent"></div>
+
+<div class="main">
+
+  <!-- STEPS -->
+  <div class="card">
+    <div class="card-title">📋 Pasos</div>
+    <div class="step"><div class="step-num active" id="s1">1</div><div>Configura tu Anthropic API Key</div></div>
+    <div class="step"><div class="step-num" id="s2">2</div><div>Sube tu catálogo Excel</div></div>
+    <div class="step"><div class="step-num" id="s3">3</div><div>Genera keywords con IA</div></div>
+    <div class="step"><div class="step-num" id="s4">4</div><div>Descarga el Excel con keywords</div></div>
+  </div>
+
+  <!-- API KEY -->
+  <div class="card">
+    <div class="card-title">🔑 Anthropic API Key</div>
+    <div class="form-group">
+      <label class="form-label">API Key</label>
+      <div style="display:flex;gap:8px">
+        <input class="form-input" type="password" id="apiKey" placeholder="sk-ant-..." style="flex:1">
+        <button class="btn btn-outline" onclick="testKey()">Verificar</button>
+      </div>
+      <div style="font-size:11px;color:#6B7280;margin-top:5px">La key solo se usa en tu navegador, no se guarda en ningún servidor.</div>
+    </div>
+    <div id="keyStatus" style="margin-top:8px;display:none"></div>
+  </div>
+
+  <!-- UPLOAD -->
+  <div class="card">
+    <div class="card-title">📦 Catálogo de SKUs</div>
+    <div class="upload-zone" id="dropZone">
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" onchange="handleFile(this.files[0])">
+      <div style="font-size:32px;margin-bottom:8px">📊</div>
+      <div style="font-size:14px;font-weight:600;margin-bottom:4px">Arrastra tu Excel o haz clic</div>
+      <div style="font-size:12px;color:#6B7280">Columnas requeridas: SKU, Material — Opcionales: Familia, Sublínea, Línea de Ventas, Marca</div>
+    </div>
+    <div id="fileInfo" style="display:none;margin-top:12px">
+      <div style="background:#F3F4F6;border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:20px">📊</span>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600" id="fileName"></div>
+          <div style="font-size:11px;color:#6B7280" id="fileMeta"></div>
+        </div>
+        <button class="btn btn-outline" style="padding:5px 10px;font-size:12px" onclick="clearFile()">✕</button>
+      </div>
+      <div class="stat-grid" style="margin-top:10px" id="statsGrid"></div>
+    </div>
+  </div>
+
+  <!-- CONFIG -->
+  <div class="card" id="configCard" style="display:none">
+    <div class="card-title">⚙️ Configuración</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div>
+        <label class="form-label">Tamaño de lote</label>
+        <select class="form-input" id="batchSize">
+          <option value="20">20 productos / llamada (más lento, más preciso)</option>
+          <option value="25" selected>25 productos / llamada (recomendado)</option>
+          <option value="30">30 productos / llamada (más rápido)</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Familias a procesar</label>
+        <select class="form-input" id="familyFilter">
+          <option value="all">Todas las familias</option>
+          <option value="priority">Solo proteínas y lácteos (más rápido)</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:12px;font-size:12px;color:#6B7280" id="estimateText"></div>
+  </div>
+
+  <!-- GENERATE -->
+  <div class="card" id="generateCard" style="display:none">
+    <div class="card-title">✨ Generar Keywords</div>
+    <button class="btn btn-primary btn-block" id="generateBtn" onclick="startGeneration()">
+      🚀 Iniciar generación de keywords
+    </button>
+    <div id="progressSection" style="display:none;margin-top:16px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#6B7280;margin-bottom:4px">
+        <span id="progressLabel">Procesando...</span>
+        <span id="progressPct">0%</span>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-bar" id="progressBar" style="width:0%"></div>
+      </div>
+      <div class="stat-grid" style="margin-top:12px">
+        <div class="stat"><div class="stat-num" id="statProcessed">0</div><div class="stat-label">Procesados</div></div>
+        <div class="stat"><div class="stat-num" id="statKeywords">0</div><div class="stat-label">Keywords</div></div>
+        <div class="stat"><div class="stat-num" id="statErrors">0</div><div class="stat-label">Errores</div></div>
+        <div class="stat"><div class="stat-num" id="statETA">—</div><div class="stat-label">ETA</div></div>
+      </div>
+      <div class="log" id="logBox" style="margin-top:12px"></div>
+      <button class="btn btn-outline" style="margin-top:8px;font-size:12px" onclick="stopGeneration()">⏸ Pausar</button>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="card" id="resultsCard" style="display:none">
+    <div class="card-title">✅ Resultado</div>
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+      <button class="btn btn-green" onclick="downloadExcel()">📥 Descargar Excel con keywords</button>
+      <button class="btn btn-outline" onclick="downloadJSON()">📥 Descargar JSON (backup)</button>
+    </div>
+    <div style="font-size:12px;color:#6B7280;margin-bottom:12px">Vista previa de los primeros 20 productos con keywords generadas:</div>
+    <div style="overflow-x:auto">
+      <table class="preview-table" id="previewTable">
+        <thead><tr><th>SKU</th><th>Material</th><th>Familia</th><th>Keywords generadas</th></tr></thead>
+        <tbody id="previewBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── STATE ──────────────────────────────
+let catalog = [];
+let keywordsMap = {};
+let running = false;
+let stopFlag = false;
+let startTime = 0;
+
+const PRIORITY_FAMILIES = [
+  'RES','AVES','PESCADOS Y MARISCOS','CERDO','CARNES FRIAS',
+  'CORDERO Y OTROS','QUESOS','CREMAS','MNTQUILLAS Y MARGARI',
+  'PANES Y PASTELES','FRUTAS Y VERDURAS'
+];
+
+const SYSTEM_PROMPT = `Eres un experto en distribución de alimentos para restaurantes en México y LATAM.
+Genera keywords para productos de un catálogo de distribuidora de alimentos.
+
+Para cada producto genera keywords considerando:
+1. Sinónimos y variantes del nombre (como lo pide un chef o cocinero)
+2. Contextos de uso: en qué platillos, preparaciones o recetas se usa
+3. Tipo de cocina donde aplica: mexicana, italiana, bbq, mariscos, francesa, etc.
+
+Reglas:
+- Keywords en español, minúsculas, separadas por coma
+- Máximo 8 keywords, mínimo 3
+- Distinguir formatos: "atun fresco filete" ≠ "atun lata conserva"
+- Para cortes de res: incluir nombre del corte, cocina bbq/asador/parrilla
+- Para mariscos: incluir ceviche, aguachile, tostada, parrilla si aplica
+- Para embutidos: incluir platillos como pizza, torta, tacos, pasta
+- Para quesos: incluir fundir, gratinar, tabla de quesos, tipo de cocina
+- Para lácteos/cremas: incluir salsas, postres, bebidas donde se usa
+- Para panes: incluir tipo de sándwich, torta, burger, desayuno
+- Productos con *D* al inicio son descontinuados, igual generar keywords
+
+Responde ONLY con JSON válido, sin texto adicional:
+{"results": [{"sku": "SKU", "keywords": "kw1, kw2, kw3"}]}`;
+
+// ── API KEY ────────────────────────────
+async function testKey() {
+  const key = document.getElementById('apiKey').value.trim();
+  if (!key) { showKeyStatus('Ingresa una API key', 'badge-gray'); return; }
+  showKeyStatus('Verificando...', 'badge-yellow');
+  try {
+    const r = await callAnthropic(key, 'ping', 10);
+    showKeyStatus('✓ API Key válida', 'badge-green');
+    setStep(2);
+  } catch(e) {
+    showKeyStatus('✗ Key inválida: ' + e.message, 'badge-red');
+  }
+}
+
+function showKeyStatus(msg, cls) {
+  const el = document.getElementById('keyStatus');
+  el.style.display = 'block';
+  el.innerHTML = `<span class="badge ${cls}">${msg}</span>`;
+}
+
+// ── FILE HANDLING ──────────────────────
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wb = XLSX.read(e.target.result, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+    if (!rows.length) { alert('El archivo está vacío'); return; }
+
+    const cols = Object.keys(rows[0]);
+    const hasSku = cols.some(c => c.toLowerCase() === 'sku');
+    const hasMat = cols.some(c => c.toLowerCase() === 'material');
+    if (!hasSku || !hasMat) {
+      alert('El archivo debe tener columnas SKU y Material');
+      return;
+    }
+
+    catalog = rows;
+    document.getElementById('fileName').textContent = file.name;
+
+    const families = {};
+    rows.forEach(r => {
+      const f = r.Familia || r.familia || 'Sin familia';
+      families[f] = (families[f] || 0) + 1;
+    });
+
+    const pCount = rows.filter(r => PRIORITY_FAMILIES.includes((r.Familia||'').toUpperCase())).length;
+
+    document.getElementById('fileMeta').textContent = `${rows.length} productos · ${Object.keys(families).length} familias`;
+    document.getElementById('statsGrid').innerHTML = `
+      <div class="stat"><div class="stat-num" style="font-size:20px">${rows.length}</div><div class="stat-label">Total SKUs</div></div>
+      <div class="stat"><div class="stat-num" style="font-size:20px">${Object.keys(families).length}</div><div class="stat-label">Familias</div></div>
+      <div class="stat"><div class="stat-num" style="font-size:20px;color:#16A34A">${pCount}</div><div class="stat-label">Proteínas</div></div>
+      <div class="stat"><div class="stat-num" style="font-size:20px">${rows.length - pCount}</div><div class="stat-label">Otros</div></div>`;
+
+    document.getElementById('fileInfo').style.display = 'block';
+    document.getElementById('dropZone').style.display = 'none';
+    document.getElementById('configCard').style.display = 'block';
+    document.getElementById('generateCard').style.display = 'block';
+    updateEstimate();
+    setStep(3);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function clearFile() {
+  catalog = [];
+  document.getElementById('fileInfo').style.display = 'none';
+  document.getElementById('dropZone').style.display = 'block';
+  document.getElementById('configCard').style.display = 'none';
+  document.getElementById('generateCard').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+}
+
+function updateEstimate() {
+  const batchSize = parseInt(document.getElementById('batchSize').value);
+  const filter = document.getElementById('familyFilter').value;
+  const total = filter === 'priority'
+    ? catalog.filter(r => PRIORITY_FAMILIES.includes((r.Familia||'').toUpperCase())).length
+    : catalog.length;
+  const batches = Math.ceil(total / batchSize);
+  const secs = batches * 3;
+  const mins = Math.ceil(secs / 60);
+  document.getElementById('estimateText').textContent =
+    `📊 ${total} productos en ${batches} lotes — tiempo estimado: ~${mins} minutos · costo estimado: ~$${(batches * 0.002).toFixed(2)} USD`;
+}
+
+// Drag & drop
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag'); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+
+// ── GENERATION ────────────────────────
+async function startGeneration() {
+  const key = document.getElementById('apiKey').value.trim();
+  if (!key) { alert('Ingresa tu Anthropic API Key primero'); return; }
+  if (!catalog.length) { alert('Sube el catálogo primero'); return; }
+
+  const batchSize = parseInt(document.getElementById('batchSize').value);
+  const filter = document.getElementById('familyFilter').value;
+
+  let products = filter === 'priority'
+    ? catalog.filter(r => PRIORITY_FAMILIES.includes((r.Familia||'').toUpperCase()))
+    : catalog;
+
+  // Sort: priority first
+  const priority = products.filter(r => PRIORITY_FAMILIES.includes((r.Familia||'').toUpperCase()));
+  const other = products.filter(r => !PRIORITY_FAMILIES.includes((r.Familia||'').toUpperCase()));
+  products = [...priority, ...other];
+
+  const batches = [];
+  for (let i = 0; i < products.length; i += batchSize) {
+    batches.push(products.slice(i, i + batchSize));
+  }
+
+  document.getElementById('generateBtn').disabled = true;
+  document.getElementById('progressSection').style.display = 'block';
+  running = true;
+  stopFlag = false;
+  startTime = Date.now();
+  keywordsMap = {};
+  let processed = 0;
+  let errors = 0;
+  let totalKw = 0;
+
+  log(`🚀 Iniciando: ${products.length} productos en ${batches.length} lotes`, 'info');
+
+  for (let i = 0; i < batches.length; i++) {
+    if (stopFlag) { log('⏸ Pausado por usuario', 'info'); break; }
+
+    const batch = batches[i];
+    const fam = batch[0]?.Familia || '';
+    const pct = Math.round((i / batches.length) * 100);
+
+    updateProgress(pct, `Lote ${i+1}/${batches.length} — ${fam}`, processed, totalKw, errors, batches.length - i);
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const kws = await generateBatch(key, batch);
+        Object.assign(keywordsMap, kws);
+        processed += batch.length;
+        totalKw += Object.keys(kws).length;
+        log(`✓ Lote ${i+1}: ${Object.keys(kws).length} keywords (${fam})`, 'ok');
+        break;
+      } catch(e) {
+        if (attempt === 2) {
+          errors++;
+          log(`✗ Lote ${i+1} error: ${e.message}`, 'err');
+        } else {
+          await sleep(2000);
+        }
+      }
+    }
+    await sleep(300);
+  }
+
+  updateProgress(100, '¡Completado!', processed, totalKw, errors, 0);
+  log(`\n✅ Finalizado: ${totalKw} keywords para ${processed} productos`, 'ok');
+
+  document.getElementById('generateBtn').disabled = false;
+  showResults();
+  setStep(4);
+}
+
+function stopGeneration() { stopFlag = true; }
+
+async function generateBatch(key, products) {
+  const lines = products.map(p =>
+    `SKU:${p.SKU||p.sku||''}|Fam:${p.Familia||p.familia||''}|Sub:${p['Sublínea']||p.sublinea||''}|Lin:${p['Línea de Ventas']||p.linea_ventas||''}|Mat:${p.Material||p.material||''}`
+  ).join('\n');
+
+  const prompt = `Genera keywords para estos ${products.length} productos:\n\n${lines}`;
+  const response = await callAnthropic(key, prompt, 4096);
+  const clean = response.trim().replace(/```json|```/g, '').trim();
+  const data = JSON.parse(clean);
+  const result = {};
+  (data.results || []).forEach(item => {
+    result[String(item.sku)] = item.keywords;
+  });
+  return result;
+}
+
+async function callAnthropic(key, userMsg, maxTokens = 100) {
+  const body = {
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: maxTokens,
+    system: maxTokens > 100 ? SYSTEM_PROMPT : undefined,
+    messages: [{ role: 'user', content: userMsg }]
+  };
+  if (!body.system) delete body.system;
+
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01'
+    },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) {
+    const err = await r.json();
+    throw new Error(err.error?.message || `HTTP ${r.status}`);
+  }
+  const data = await r.json();
+  return data.content[0].text;
+}
+
+// ── RESULTS ────────────────────────────
+function showResults() {
+  document.getElementById('resultsCard').style.display = 'block';
+  document.getElementById('resultsCard').scrollIntoView({ behavior: 'smooth' });
+
+  const withKw = catalog.filter(r => keywordsMap[String(r.SKU || r.sku || '')]);
+  const preview = withKw.slice(0, 20);
+
+  document.getElementById('previewBody').innerHTML = preview.map(r => {
+    const sku = String(r.SKU || r.sku || '');
+    const kw = keywordsMap[sku] || '';
+    return `<tr>
+      <td style="font-family:monospace;font-size:11px;color:#6B7280">${sku}</td>
+      <td>${r.Material || r.material || ''}</td>
+      <td><span class="badge badge-gray" style="font-size:10px">${r.Familia || r.familia || ''}</span></td>
+      <td class="kw-cell">${kw}</td>
+    </tr>`;
+  }).join('');
+}
+
+function downloadExcel() {
+  const wb = XLSX.utils.book_new();
+  const rows = [['Familia','Sublínea','Línea de Ventas','Marca','SKU','Material','Keywords']];
+  catalog.forEach(r => {
+    const sku = String(r.SKU || r.sku || '');
+    rows.push([
+      r.Familia || r.familia || '',
+      r['Sublínea'] || r.sublinea || '',
+      r['Línea de Ventas'] || r.linea_ventas || '',
+      r.Marca || r.marca || '',
+      sku,
+      r.Material || r.material || '',
+      keywordsMap[sku] || ''
+    ]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:22},{wch:16},{wch:20},{wch:16},{wch:14},{wch:45},{wch:60}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Catálogo');
+  XLSX.writeFile(wb, `MenuLens_Catalogo_Keywords_${new Date().toISOString().split('T')[0]}.xlsx`);
+}
+
+function downloadJSON() {
+  const blob = new Blob([JSON.stringify(keywordsMap, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `keywords_backup_${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+}
+
+// ── HELPERS ────────────────────────────
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function log(msg, type = 'info') {
+  const el = document.getElementById('logBox');
+  const div = document.createElement('div');
+  div.className = `log-line log-${type}`;
+  div.textContent = `[${new Date().toLocaleTimeString('es')}] ${msg}`;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+
+function updateProgress(pct, label, processed, kws, errors, remaining) {
+  document.getElementById('progressBar').style.width = pct + '%';
+  document.getElementById('progressLabel').textContent = label;
+  document.getElementById('progressPct').textContent = pct + '%';
+  document.getElementById('statProcessed').textContent = processed;
+  document.getElementById('statKeywords').textContent = kws;
+  document.getElementById('statErrors').textContent = errors;
+  if (remaining > 0 && processed > 0) {
+    const elapsed = (Date.now() - startTime) / 1000;
+    const rate = processed / elapsed;
+    const eta = Math.ceil((remaining * 25) / rate / 60);
+    document.getElementById('statETA').textContent = eta + ' min';
+  } else {
+    document.getElementById('statETA').textContent = processed > 0 ? '✓' : '—';
+  }
+}
+
+function setStep(n) {
+  for (let i = 1; i <= 4; i++) {
+    const el = document.getElementById('s' + i);
+    el.className = 'step-num' + (i < n ? ' done' : i === n ? ' active' : '');
+    el.textContent = i < n ? '✓' : i;
+  }
+}
+
+document.getElementById('batchSize').addEventListener('change', updateEstimate);
+document.getElementById('familyFilter').addEventListener('change', updateEstimate);
+</script>
+</body>
+</html>
