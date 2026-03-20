@@ -5,13 +5,23 @@
 // ── DEBUG LOGGER ─────────────────────
 function dbg(msg, type = 'info') {
   const colors = { info: '#00ff88', warn: '#ffcc00', error: '#ff4444' };
-  console.log(msg);
+  console.log(`[ML:${type}]`, msg);
+
+  // Save to sessionStorage so log persists across pages
+  try {
+    const logs = JSON.parse(sessionStorage.getItem('ml_debug_log') || '[]');
+    logs.push({ msg, type, ts: new Date().toLocaleTimeString('es') });
+    if (logs.length > 50) logs.shift(); // keep last 50
+    sessionStorage.setItem('ml_debug_log', JSON.stringify(logs));
+  } catch(e) {}
+
+  // Show in panel if it exists on this page
   const panel = document.getElementById('debugPanel');
   if (panel) {
     panel.style.display = 'block';
     const line = document.createElement('div');
     line.style.color = colors[type] || '#00ff88';
-    line.textContent = `► ${msg}`;
+    line.textContent = `[${new Date().toLocaleTimeString('es')}] ► ${msg}`;
     panel.appendChild(line);
     panel.scrollTop = panel.scrollHeight;
   }
