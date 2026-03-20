@@ -91,11 +91,8 @@ RESPONDE SOLO con este JSON válido, sin texto adicional ni bloques de código:
 }`;
 }
 
-// ── CALL CLAUDE API ───────────────────
+// ── CALL CLAUDE API via Vercel proxy ──
 async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
-  const apiKey = Config.anthropicKey();
-  if (!apiKey) throw new Error('Configura el Anthropic API Key en el panel de admin');
-
   const mediaType = fileType === 'application/pdf' ? 'application/pdf' : (fileType || 'image/jpeg');
   const isPdf = fileType === 'application/pdf';
 
@@ -110,13 +107,10 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
     }
   ];
 
-  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+  // Llamar a /api/analyze (proxy serverless en Vercel — evita CORS)
+  const resp = await fetch('/api/analyze', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01'
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 8096,
@@ -127,7 +121,7 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
 
   if (!resp.ok) {
     const err = await resp.json();
-    throw new Error(err.error?.message || 'Error en Claude API (' + resp.status + ')');
+    throw new Error(err.error || 'Error en el análisis (' + resp.status + ')');
   }
 
   const data = await resp.json();
