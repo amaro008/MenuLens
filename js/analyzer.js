@@ -14,81 +14,59 @@ function loadCatalogFromStorage() {
 }
 
 // ── SMART CATALOG FILTER ─────────────
-// Filters catalog by keywords relevant to the menu being analyzed
-// So Claude always sees the most relevant products regardless of catalog size
-function buildSmartCatalogSummary(menuKeywords = []) {
+// Strategy: always send ALL protein families first (RES, AVES, PESCADOS, CERDO, CARNES FRIAS)
+// then fill remaining slots with other families
+// This guarantees protein matches regardless of catalog size
+function buildSmartCatalogSummary() {
   if (!catalogData.length) return 'SIN CATÁLOGO CARGADO';
 
-  // Food-related keyword categories to always include
-  const proteinKeywords = [
-    'res','carne','beef','steak','arrachera','ribeye','rib eye','new york','t-bone',
-    'costill','borrego','cordero','cerdo','pork','chamorro','barbacoa','birria',
-    'pollo','chicken','pechuga','muslo','ala','alita','wing',
-    'camaron','shrimp','langost','pulpo','octopus','almeja','clam','ostion',
-    'pescado','fish','atun','salmon','mahi','tilapia','robalo','huachinango',
-    'chorizo','sausage','salchicha','jamon','tocino','bacon','embutido',
-    'tuetano','marrow','costilla','short rib','picana','sirloin','cowboy'
+  // Priority families — always include ALL products from these
+  const PRIORITY_FAMILIES = [
+    'RES', 'AVES', 'PESCADOS Y MARISCOS', 'CERDO',
+    'CARNES FRIAS', 'CORDERO Y OTROS', 'COMIDAS PREPARADAS'
   ];
 
-  const otherKeywords = [
-    'queso','cheese','manchego','oaxaca','gouda','parmesano','mozzarella',
-    'crema','cream','mantequilla','butter','leche','milk','lacteo',
-    'aguacate','avocado','guacamole','frijol','bean','arroz','rice',
-    'papa','potato','cebolla','onion','tomate','tomato','chile','pepper',
-    'tortilla','pan','bread','masa',
-    'salsa','bbq','chimichurri','aderezo','mayonesa','mostaza','ketchup',
-    'aceite','oil','vinagre','limon','lime','ajo','garlic'
+  // Secondary families — include sample
+  const SECONDARY_FAMILIES = [
+    'QUESOS', 'YOGHURT', 'CREMAS', 'MNTQUILLAS Y MARGARI',
+    'PANES Y PASTELES', 'FRUTAS Y VERDURAS', 'VIGAR'
   ];
 
-  const allKeywords = [...proteinKeywords, ...otherKeywords, ...menuKeywords];
+  const normalize = (str) => (str || '').toString().trim().toUpperCase();
 
-  // Normalize: lowercase, remove accents
-  const normalize = (str) => (str || '').toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const priorityProducts = [];
+  const secondaryProducts = [];
+  const otherProducts = [];
 
-  // Score each product by keyword matches
-  const scored = catalogData.map(r => {
-    const material = normalize(r.Material || r.material || '');
+  catalogData.forEach(r => {
     const familia = normalize(r.Familia || r.familia || '');
-    const linea = normalize(r['Línea de Ventas'] || r.linea_ventas || '');
-    const combined = `${material} ${familia} ${linea}`;
+    const keywords = r.Keywords || r.keywords || r.KEYWORDS || '';
+    const line = `SKU:${r.SKU||r.sku||''}|Material:${r.Material||r.material||''}|Marca:${r.Marca||r.marca||''}|Familia:${familia}|Sublinea:${r['Sublínea']||r.sublinea||''}|Línea:${r['Línea de Ventas']||r.linea_ventas||''}${keywords ? '|Keywords:'+keywords : ''}`;
 
-    let score = 0;
-    // Protein keywords score higher
-    proteinKeywords.forEach(kw => {
-      if (combined.includes(normalize(kw))) score += 3;
-    });
-    otherKeywords.forEach(kw => {
-      if (combined.includes(normalize(kw))) score += 1;
-    });
-    menuKeywords.forEach(kw => {
-      if (combined.includes(normalize(kw))) score += 2;
-    });
-    return { r, score };
+    if (PRIORITY_FAMILIES.includes(familia)) {
+      priorityProducts.push(line);
+    } else if (SECONDARY_FAMILIES.includes(familia)) {
+      secondaryProducts.push(line);
+    } else {
+      otherProducts.push(line);
+    }
   });
 
-  // Take top 500 by score, then all with score > 0 up to 600
-  const relevant = scored
-    .filter(x => x.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 600)
-    .map(x => x.r);
+  // Build final list: ALL priority + up to 200 secondary + up to 100 other
+  const finalList = [
+    ...priorityProducts,
+    ...secondaryProducts.slice(0, 200),
+    ...otherProducts.slice(0, 100)
+  ];
 
-  // If not enough relevant, fill with first products
-  const finalList = relevant.length >= 50
-    ? relevant
-    : [...relevant, ...catalogData.slice(0, 300 - relevant.length)];
+  console.log(`Catalog filter: ${catalogData.length} total → ${priorityProducts.length} protein + ${Math.min(secondaryProducts.length,200)} secondary + ${Math.min(otherProducts.length,100)} other = ${finalList.length} sent to Claude`);
 
-  console.log(`Catalog filter: ${catalogData.length} total → ${finalList.length} relevant sent to Claude`);
-
-  return finalList.map(r =>
-    `SKU:${r.SKU||r.sku||''}|Material:${r.Material||r.material||''}|Marca:${r.Marca||r.marca||''}|Familia:${r.Familia||r.familia||''}|Línea:${r['Línea de Ventas']||r.linea_ventas||''}`
-  ).join('\n');
+  return finalList.join('\n');
 }
 
 // ── BUILD SYSTEM PROMPT ───────────────
-function buildSystemPrompt(menuKeywords = []) {
-  const catalogSummary = buildSmartCatalogSummary(menuKeywords);
+function buildSystemPrompt() {
+  const catalogSummary = buildSmartCatalogSummary();
 
   return `Eres un experto analizador de menús de restaurantes para distribuidoras de alimentos. Sigues reglas estrictas.
 
@@ -131,12 +109,32 @@ TIPOS DE COMIDA — elige el más cercano:
 Mexicana, Italiana, Americana, Mariscos, Asiática, Mediterránea,
 Panadería/Café, Fast Food, Saludable/Vegana, Internacional, Fusión, Otra
 
-MATCHING — normalización:
-- Minúsculas, sin acentos, singular/plural
-- Buscar en campo Material usando término núcleo
-- "queso manchego" → buscar "manchego" en Material
-- Empates: elegir mejor candidato + hasta 3 alternativas
-- Confianza Alta=match casi exacto, Media=variante, Baja=débil
+MATCHING — normalización, contexto y estrategia:
+
+REGLA DE CONTEXTO (CRÍTICA para desambiguar):
+- Si el platillo es tostada, ceviche, aguachile, ensalada, carpaccio, sashimi, filete, a la parrilla, al ajillo, a la mantequilla, o precio > $100 → preferir Familia:PESCADOS Y MARISCOS o RES (producto FRESCO) sobre ABARROTES (conserva/lata)
+- Si el platillo es sándwich, torta, emparedado, pasta, o precio < $80 → puede ser conserva/lata
+- "atún" en tostada/ceviche/ensalada → PESCADOS Y MARISCOS (fresco), NO ABARROTES (lata)
+- "atún" en sándwich → ABARROTES puede ser válido
+- Usar Keywords del catálogo si están disponibles para confirmar el match
+
+ESTRATEGIA DE BÚSQUEDA:
+1. Primero verificar si hay Keywords en el catálogo que coincidan con el ingrediente o platillo
+2. Para proteínas: buscar en Sublinea y Familia (más confiable que Material)
+   - "camarón" → Sublinea:CAMARON, Familia:PESCADOS Y MARISCOS
+   - "arrachera" → Sublinea:ARRACHERA, Familia:RES
+   - "ribeye/rib eye" → Sublinea:RIBEYE, Familia:RES
+   - "pollo/alita/pechuga" → Familia:AVES
+   - "costillas" → Sublinea con COSTILL o RIB, Familia:RES o CERDO
+   - "chorizo" → Familia:CARNES FRIAS, Sublinea:CHORIZO
+   - "pulpo" → Sublinea:PULPO, Familia:PESCADOS Y MARISCOS
+   - "langosta" → Sublinea:LANGOSTA, Familia:PESCADOS Y MARISCOS
+   - "atún fresco/filete" → Familia:PESCADOS Y MARISCOS (NO ABARROTES)
+3. Para otros: buscar en Material usando término núcleo
+4. Material está en MAYÚSCULAS: "RIBEYE LIPON 112A CAB SWIFT" — buscar substring
+5. Normalizar: sin acentos, mayúsculas, buscar substring no exacto
+6. Empates: elegir mejor candidato usando contexto del platillo + hasta 3 alternativas
+7. Confianza Alta=match en Sublinea/Familia+contexto, Media=variante Material, Baja=débil
 
 REGLA TOP 10 — ORDEN OBLIGATORIO:
 1. Agrupa todos los matches por prioridad
@@ -189,12 +187,6 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
     }
   ];
 
-  // Extract keywords from biz name and city to improve catalog filtering
-  const menuKeywords = [
-    ...bizName.toLowerCase().split(/\s+/),
-    ...bizCity.toLowerCase().split(/\s+/)
-  ].filter(w => w.length > 3);
-
   // Llamar a /api/analyze (proxy serverless en Vercel — evita CORS)
   const resp = await fetch('/api/analyze', {
     method: 'POST',
@@ -202,7 +194,7 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 8096,
-      system: buildSystemPrompt(menuKeywords),
+      system: buildSystemPrompt(),
       messages: [{ role: 'user', content: userContent }]
     })
   });

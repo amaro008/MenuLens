@@ -99,13 +99,14 @@ function shareWhatsapp(data) {
 function downloadCatalogTemplate() {
   const wb = XLSX.utils.book_new();
   const data = [
-    ['Familia', 'Sublínea', 'Línea de Ventas', 'Marca', 'SKU', 'Material'],
-    ['Lácteos', 'Quesos', 'Quesos maduros', 'Marca X', 'QSO001', 'Queso manchego 400g'],
-    ['Proteínas', 'Carnes frías', 'Embutidos', 'Marca Y', 'CRF001', 'Jamón serrano 200g'],
-    ['Aceites', 'Aceites vegetales', 'Aceite de oliva', 'Marca Z', 'ACE001', 'Aceite de oliva extra virgen 1L'],
+    ['Familia', 'Sublínea', 'Línea de Ventas', 'Marca', 'SKU', 'Material', 'Keywords'],
+    ['PESCADOS Y MARISCOS', 'ATUN', 'PESCADOS', 'TUNY', '70070004', 'ATUN CENTER CUT TUNY', 'atun fresco, filete atun, atun entero'],
+    ['ABARROTES', 'ATUN', 'PROTEINA', 'TUNY', '9982', 'ATUN TUNY ACEITE 140G', 'atun lata, atun enlatado, conserva, sandwich'],
+    ['RES', 'RIBEYE', 'RIB', 'CAB', '70001506', 'RIBEYE LIPON 112A CAB SWIFT', 'ribeye, rib eye, corte premium'],
+    ['AVES', 'ALAS', 'POLLO', 'DELIPOLLO', '70060075', 'ALITA 1&2 DELIPOLLO IQF', 'alitas, wings, alitas de pollo, bbq'],
   ];
   const ws = XLSX.utils.aoa_to_sheet(data);
-  ws['!cols'] = [{ wch: 16 }, { wch: 16 }, { wch: 20 }, { wch: 16 }, { wch: 10 }, { wch: 42 }];
+  ws['!cols'] = [{ wch: 22 }, { wch: 16 }, { wch: 20 }, { wch: 16 }, { wch: 12 }, { wch: 42 }, { wch: 40 }];
   XLSX.utils.book_append_sheet(wb, ws, 'Catálogo');
   XLSX.writeFile(wb, 'MenuLens_Plantilla_Catalogo.xlsx');
 }
