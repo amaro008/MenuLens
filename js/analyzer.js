@@ -228,40 +228,77 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
 
   const data = await resp.json();
   const raw = data.content[0].text.trim();
+  console.log('Claude raw response (first 300):', raw.substring(0, 300));
 
-  // Try multiple extraction strategies
   let parsed = null;
 
   // Strategy 1: direct parse
   try { parsed = JSON.parse(raw); } catch(e) {}
 
-  // Strategy 2: strip markdown code blocks
+  // Strategy 2: strip ALL markdown fences (handles ```json, ``` json, ~~~, etc)
   if (!parsed) {
     try {
-      const stripped = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+      const stripped = raw
+        .replace(/^```[\w\s]*
+?/im, '')
+        .replace(/```[\s]*$/im, '')
+        .replace(/^~~~[\w\s]*
+?/im, '')
+        .replace(/~~~[\s]*$/im, '')
+        .trim();
       parsed = JSON.parse(stripped);
     } catch(e) {}
   }
 
-  // Strategy 3: extract first { ... } block
+  // Strategy 3: find the LAST complete {...} block (handles trailing text)
   if (!parsed) {
     try {
-      const match = raw.match(/\{[\s\S]*\}/);
-      if (match) parsed = JSON.parse(match[0]);
+      const start = raw.indexOf('{');
+      const end = raw.lastIndexOf('}');
+      if (start > -1 && end > start) {
+        parsed = JSON.parse(raw.substring(start, end + 1));
+      }
     } catch(e) {}
   }
 
-  // Strategy 4: find JSON after any preamble text
+  // Strategy 4: find JSON after preamble line by line
   if (!parsed) {
     try {
-      const idx = raw.indexOf('{');
-      if (idx > -1) parsed = JSON.parse(raw.substring(idx));
+      const lines = raw.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line.startsWith('{')) {
+          const attempt = lines.slice(i).join('\n');
+          try { parsed = JSON.parse(attempt); break; } catch(e) {}
+        }
+      }
+    } catch(e) {}
+  }
+
+  // Strategy 5: aggressive — remove everything before first { and after last }
+  if (!parsed) {
+    try {
+      const cleaned = raw.replace(/^[^{]*/s, '').replace(/[^}]*$/s, '');
+      if (cleaned) parsed = JSON.parse(cleaned);
     } catch(e) {}
   }
 
   if (!parsed) {
-    console.error('Raw response:', raw.substring(0, 500));
-    throw new Error('La IA devolvió un formato inesperado. Intenta de nuevo con una imagen más clara.');
+    console.error('All parsing strategies failed. Raw response:', raw);
+    // Return minimal valid structure so app doesn't crash
+    parsed = {
+      restaurant_name: '',
+      food_type: 'Otra',
+      summary: {
+        total_dishes: 0, sellable_ingredients: 0,
+        exact_matches: 0, approx_matches: 0, not_found: 0,
+        key_findings: ['El menú no pudo ser procesado correctamente. Intenta con una imagen más clara o en mejor resolución.'],
+        menu_quality_note: 'No se pudo analizar el menú. Verifica que la imagen sea legible.',
+        top10_skus: []
+      },
+      price_analysis: {},
+      dishes: [], sku_table: [], matching_table: [], gaps: [], avg_price: 0
+    };
   }
 
   return parsed;
