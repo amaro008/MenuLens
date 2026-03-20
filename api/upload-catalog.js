@@ -1,4 +1,4 @@
-// api/upload-catalog.js — sube catálogo a Supabase via REST API
+// api/upload-catalog.js — usa UPSERT para evitar duplicados
 export const config = {
   api: { bodyParser: { sizeLimit: '15mb' } }
 };
@@ -20,30 +20,15 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'products array required' });
   }
 
+  const base = `${supabaseUrl}/rest/v1`;
   const headers = {
     'Content-Type': 'application/json',
     'apikey': supabaseKey,
     'Authorization': `Bearer ${supabaseKey}`,
-    'Prefer': 'return=minimal'
+    'Prefer': 'resolution=merge-duplicates,return=minimal'
   };
 
-  const base = `${supabaseUrl}/rest/v1`;
-
   try {
-    // Step 1: Delete ALL existing records for this company
-    // Use neq filter trick to delete all rows matching company
-    const delResp = await fetch(
-      `${base}/sku_catalog?company=eq.${encodeURIComponent(company)}&sku=neq.___NONE___`,
-      { method: 'DELETE', headers }
-    );
-    console.log('Delete status:', delResp.status);
-
-    // Wait a moment for delete to complete
-    await new Promise(r => setTimeout(r, 500));
-
-    // Step 2: Insert in batches of 300 (smaller to avoid timeouts)
-    const BATCH = 300;
-    let inserted = 0;
     const rows = products
       .map(p => ({
         company,
@@ -58,25 +43,27 @@ export default async function handler(req, res) {
       }))
       .filter(p => p.sku && p.material);
 
+    // Upsert in batches of 300
+    const BATCH = 300;
+    let upserted = 0;
+
     for (let i = 0; i < rows.length; i += BATCH) {
       const batch = rows.slice(i, i + BATCH);
-
-      const insertResp = await fetch(`${base}/sku_catalog`, {
+      const resp = await fetch(`${base}/sku_catalog`, {
         method: 'POST',
-        headers: { ...headers, 'Prefer': 'return=minimal,resolution=ignore-duplicates' },
+        headers,
         body: JSON.stringify(batch)
       });
 
-      if (!insertResp.ok) {
-        const errText = await insertResp.text();
-        throw new Error(`Batch ${Math.floor(i/BATCH)+1}: ${errText.substring(0, 300)}`);
+      if (!resp.ok) {
+        const err = await resp.text();
+        throw new Error(`Batch ${Math.floor(i/BATCH)+1}: ${err.substring(0, 300)}`);
       }
-
-      inserted += batch.length;
-      console.log(`Batch ${Math.floor(i/BATCH)+1} OK: ${inserted}/${rows.length}`);
+      upserted += batch.length;
+      console.log(`Upserted ${upserted}/${rows.length}`);
     }
 
-    return res.status(200).json({ success: true, inserted, total: products.length });
+    return res.status(200).json({ success: true, inserted: upserted, total: products.length });
 
   } catch(e) {
     console.error('Upload error:', e.message);
