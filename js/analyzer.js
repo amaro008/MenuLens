@@ -275,7 +275,7 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 8096,
+      max_tokens: 16000,
       system: finalPrompt,
       messages: [{ role: 'user', content: userContent }]
     })
