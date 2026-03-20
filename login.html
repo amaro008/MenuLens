@@ -116,8 +116,9 @@
       return;
     }
 
-    // SUPABASE MODE — use config from API
-    const sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey);
+    // SUPABASE MODE — use singleton client
+    const sb = window._mlSupabase || window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey);
+    if (!window._mlSupabase) window._mlSupabase = sb;
 
     const { data, error } = await sb.auth.signInWithPassword({ email, password: pwd });
     if (error) {
@@ -155,18 +156,27 @@
     toast('Contacta al administrador para restablecer tu contraseña', '');
   }
 
-  // Redirect if already logged in
+  // Redirect if already logged in — fast check with timeout
   (async () => {
-    const sb = getSupabase();
-    if (sb) {
-      const { data: { session } } = await sb.auth.getSession();
-      if (session) {
-        const { data: p } = await sb.from('users').select('role').eq('id', session.user.id).single();
-        window.location.href = ['admin','supervisor'].includes(p?.role) ? 'admin-kpi.html' : 'dashboard.html';
-      }
-    } else if (sessionStorage.getItem('ml_demo_user')) {
+    // Check demo session first (instant)
+    if (sessionStorage.getItem('ml_demo_user')) {
       const u = JSON.parse(sessionStorage.getItem('ml_demo_user'));
       window.location.href = ['admin','supervisor'].includes(u.role) ? 'admin-kpi.html' : 'dashboard.html';
+      return;
+    }
+    // Check Supabase session using singleton
+    try {
+      const cfg = await loadConfig();
+      if (!cfg.supabaseUrl || !cfg.supabaseKey) return;
+      const sb = await getSupabaseAsync();
+      if (!sb) return;
+      const { data } = await sb.auth.getSession();
+      if (data?.session) {
+        const { data: p } = await sb.from('users').select('role').eq('id', data.session.user.id).single();
+        window.location.href = ['admin','supervisor'].includes(p?.role) ? 'admin-kpi.html' : 'dashboard.html';
+      }
+    } catch(e) {
+      // Error — show login form
     }
   })();
 </script>
