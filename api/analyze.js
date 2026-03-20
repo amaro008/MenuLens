@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     const approxTokens = Math.round(systemSize / 4);
     console.log(`[analyze] model:${model} system:~${approxTokens}tok max_tokens:${max_tokens}`);
 
-    if (approxTokens > 150000) {
+    if (approxTokens > 180000) {
       return res.status(400).json({ 
         error: `System prompt demasiado grande (~${approxTokens} tokens). Reduce el catálogo.` 
       });
