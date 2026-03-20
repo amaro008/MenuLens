@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>MenuLens — Usuarios</title>
+<link rel="stylesheet" href="../css/main.css">
+<link rel="stylesheet" href="../css/components.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div id="app">
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+    <div class="loading-title" id="loadingTitle">Procesando…</div>
+    <div class="loading-step"  id="loadingStep"></div>
+  </div>
+  <div id="toast"></div>
+
+  <!-- Modal: add/edit user -->
+  <div class="modal-overlay" id="modalUser">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title" id="modalTitle">Agregar usuario</div>
+        <button class="btn btn-ghost btn-icon" onclick="closeModal('modalUser')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="form-group">
+            <label class="form-label">Nombre completo</label>
+            <input class="form-input" id="uName" placeholder="Ej: Carlos Vega">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Correo electrónico</label>
+            <input class="form-input" id="uEmail" type="email" placeholder="carlos@empresa.com">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Contraseña temporal</label>
+            <input class="form-input" id="uPassword" type="password" placeholder="Mín. 8 caracteres">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Rol</label>
+            <select class="form-input" id="uRole">
+              <option value="advisor">Asesor</option>
+              <option value="supervisor">Supervisor</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeModal('modalUser')">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveUser()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="topbar" id="topbar"></div>
+  <div class="topbar-accent"></div>
+  <div class="layout">
+    <div class="sidebar" id="sidebar"></div>
+    <div class="main-content">
+      <div class="scrollable">
+        <div class="content">
+          <div class="page-header">
+            <div>
+              <div class="page-title">Usuarios</div>
+              <div class="page-sub">Alta, baja y permisos</div>
+            </div>
+            <button class="btn btn-primary" onclick="openUserModal()">+ Agregar usuario</button>
+          </div>
+
+          <div class="card">
+            <div class="card-body">
+              <div class="card-header">
+                <div class="card-title">👥 Usuarios registrados</div>
+                <span class="badge badge-red" id="userCount">0 usuarios</span>
+              </div>
+              <div id="userList"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-body">
+              <div class="card-header">
+                <div class="card-title">🔐 Permisos por rol — Asesor</div>
+                <button class="btn btn-primary btn-sm" onclick="savePerms()">Guardar cambios</button>
+              </div>
+              <div class="permission-row">
+                <div><div class="perm-label">Subir menús y analizar</div></div>
+                <button class="toggle on" id="pUpload" onclick="this.classList.toggle('on')"></button>
+              </div>
+              <div class="permission-row">
+                <div><div class="perm-label">Ver historial propio</div></div>
+                <button class="toggle on" id="pHistOwn" onclick="this.classList.toggle('on')"></button>
+              </div>
+              <div class="permission-row">
+                <div><div class="perm-label">Ver historial de todos</div></div>
+                <button class="toggle" id="pHistAll" onclick="this.classList.toggle('on')"></button>
+              </div>
+              <div class="permission-row">
+                <div><div class="perm-label">Exportar Excel de resultados</div></div>
+                <button class="toggle on" id="pExport" onclick="this.classList.toggle('on')"></button>
+              </div>
+              <div class="permission-row">
+                <div><div class="perm-label">Compartir por WhatsApp</div></div>
+                <button class="toggle on" id="pShare" onclick="this.classList.toggle('on')"></button>
+              </div>
+              <div class="permission-row">
+                <div><div class="perm-label">Acceso al panel de administración</div></div>
+                <button class="toggle" id="pAdmin" onclick="this.classList.toggle('on')"></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../js/supabase.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/ui.js"></script>
+<script>
+(async () => {
+  const user = await requireAuth('admin_or_supervisor');
+  if (!user) return;
+  renderTopbar(user, true);
+  renderSidebar(currentPage, user.role);
+  loadUsers();
+})();
+
+async function loadUsers() {
+  const sb = getSupabase();
+  if (!sb) {
+    renderUsers([
+      { id:'1', name:'Carlos Vega',     email:'carlos@sigma.com',  role:'advisor' },
+      { id:'2', name:'María Rodríguez', email:'m.rod@sigma.com',   role:'advisor' },
+      { id:'3', name:'Jorge Pérez',     email:'j.perez@sigma.com', role:'supervisor' },
+      { id:'4', name:'Administrador',   email:'admin@sigma.com',   role:'admin' },
+    ]);
+    return;
+  }
+  const { data } = await sb.from('users').select('*').order('created_at');
+  renderUsers(data || []);
+}
+
+function renderUsers(list) {
+  document.getElementById('userCount').textContent = list.length + ' usuarios';
+  const roleMap = { admin:'badge-red', supervisor:'badge-green', advisor:'badge-yellow' };
+  const roleLabel = { admin:'Admin', supervisor:'Supervisor', advisor:'Asesor' };
+  document.getElementById('userList').innerHTML = list.map(u => `
+    <div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid #F9FAFB">
+      <div class="avatar-md">${initials(u.name)}</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600">${u.name}</div>
+        <div style="font-size:11px;color:var(--text-m)">${u.email}</div>
+      </div>
+      <span class="badge ${roleMap[u.role]||'badge-gray'}">${roleLabel[u.role]||u.role}</span>
+      <button class="btn btn-ghost btn-xs" onclick="editUser('${u.id}','${u.name}','${u.email}','${u.role}')">Editar</button>
+    </div>`).join('') || '<div style="color:var(--text-l);font-size:13px;padding:12px 0">Sin usuarios</div>';
+}
+
+function openUserModal() {
+  document.getElementById('modalTitle').textContent = 'Agregar usuario';
+  document.getElementById('uName').value = '';
+  document.getElementById('uEmail').value = '';
+  document.getElementById('uPassword').value = '';
+  document.getElementById('uRole').value = 'advisor';
+  openModal('modalUser');
+}
+
+function editUser(id, name, email, role) {
+  document.getElementById('modalTitle').textContent = 'Editar usuario';
+  document.getElementById('uName').value = name;
+  document.getElementById('uEmail').value = email;
+  document.getElementById('uPassword').value = '';
+  document.getElementById('uRole').value = role;
+  openModal('modalUser');
+}
+
+async function saveUser() {
+  const name  = document.getElementById('uName').value.trim();
+  const email = document.getElementById('uEmail').value.trim();
+  const pwd   = document.getElementById('uPassword').value;
+  const role  = document.getElementById('uRole').value;
+  if (!name || !email) { toast('Nombre y correo son requeridos', 'error'); return; }
+
+  const sb = getSupabase();
+  if (!sb) { toast('Configura Supabase primero', 'error'); return; }
+  if (!pwd || pwd.length < 8) { toast('La contraseña debe tener mínimo 8 caracteres', 'error'); return; }
+
+  showLoading('Creando usuario…', '');
+  const { data: authData, error } = await sb.auth.admin.createUser({
+    email, password: pwd, email_confirm: true,
+    user_metadata: { name, role }
+  });
+  if (error) { hideLoading(); toast('Error: ' + error.message, 'error'); return; }
+  // Profile is auto-created by DB trigger
+  hideLoading();
+  closeModal('modalUser');
+  toast('✅ Usuario creado exitosamente', 'success');
+  loadUsers();
+}
+
+function savePerms() { toast('✅ Permisos guardados', 'success'); }
+</script>
+</body>
+</html>

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>MenuLens — Historial</title>
+<link rel="stylesheet" href="../css/main.css">
+<link rel="stylesheet" href="../css/components.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div id="app">
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+    <div class="loading-title" id="loadingTitle">Cargando historial…</div>
+    <div class="loading-step"  id="loadingStep"></div>
+  </div>
+  <div id="toast"></div>
+  <div class="topbar" id="topbar"></div>
+  <div class="topbar-accent"></div>
+  <div class="layout">
+    <div class="sidebar" id="sidebar"></div>
+    <div class="main-content">
+      <div class="scrollable">
+        <div class="content">
+          <div class="page-header">
+            <div>
+              <div class="page-title">Historial</div>
+              <div class="page-sub">Tus análisis guardados</div>
+            </div>
+            <a href="analyzer.html" class="btn btn-primary">+ Nuevo análisis</a>
+          </div>
+
+          <div class="card">
+            <div class="card-body" style="padding-bottom:10px">
+              <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <input class="form-input" id="searchInput" placeholder="Buscar restaurante…"
+                  style="flex:1;min-width:160px" oninput="filterTable()">
+                <select class="form-input" id="typeFilter" style="width:160px" onchange="filterTable()">
+                  <option value="">Todos los tipos</option>
+                  <option>Mexicana</option><option>Italiana</option><option>Americana</option>
+                  <option>Mariscos</option><option>Asiática</option><option>Mediterránea</option>
+                  <option>Panadería/Café</option><option>Fast Food</option><option>Saludable/Vegana</option>
+                  <option>Internacional</option><option>Fusión</option><option>Otra</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Restaurante</th><th>Tipo</th><th>Ciudad</th><th>Fecha</th><th>Platillos</th><th>SKUs</th><th>Estado</th><th></th></tr>
+                </thead>
+                <tbody id="histBody">
+                  <tr><td colspan="8" style="text-align:center;color:var(--text-l);padding:32px">Sin análisis aún</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../js/supabase.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/ui.js"></script>
+<script>
+let _allData = [];
+
+(async () => {
+  const user = await requireAuth();
+  if (!user) return;
+  renderTopbar(user, false);
+  renderSidebar(currentPage, user.role);
+  await loadHistory(user);
+})();
+
+async function loadHistory(user) {
+  const sb = getSupabase();
+  if (!sb) {
+    _allData = [
+      { id: '1', restaurants: { name: 'La Trattoria del Centro', city: 'CDMX', food_type: 'Italiana' }, created_at: new Date().toISOString(), dish_count: 12, sku_count: 14, status: 'complete' },
+      { id: '2', restaurants: { name: 'Birria El Camino', city: 'Guadalajara', food_type: 'Mexicana' }, created_at: new Date(Date.now() - 86400000).toISOString(), dish_count: 8, sku_count: 9, status: 'complete' },
+    ];
+    renderTable(_allData);
+    return;
+  }
+
+  showLoading('Cargando historial…', '');
+  const { data } = await sb.from('analyses')
+    .select('id, created_at, status, dish_count, sku_count, restaurants(name, city, food_type)')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false });
+  hideLoading();
+  _allData = data || [];
+  renderTable(_allData);
+}
+
+function renderTable(data) {
+  const rows = data.map(a => `
+    <tr>
+      <td><div class="td-main">${a.restaurants?.name || '—'}</div></td>
+      <td><span class="badge badge-yellow">${a.restaurants?.food_type || '—'}</span></td>
+      <td>${a.restaurants?.city || '—'}</td>
+      <td>${formatDate(a.created_at)}</td>
+      <td>${a.dish_count || '—'}</td>
+      <td>${a.sku_count || '—'}</td>
+      <td><span class="badge ${a.status === 'complete' ? 'badge-green' : 'badge-yellow'}">${a.status === 'complete' ? 'Completo' : 'En proceso'}</span></td>
+      <td><a href="results.html?id=${a.id}" class="btn btn-outline btn-xs">Ver</a></td>
+    </tr>`).join('');
+  document.getElementById('histBody').innerHTML = rows ||
+    `<tr><td colspan="8" style="text-align:center;color:var(--text-l);padding:32px">Sin resultados</td></tr>`;
+}
+
+function filterTable() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const f = document.getElementById('typeFilter').value;
+  renderTable(_allData.filter(a =>
+    (!q || (a.restaurants?.name || '').toLowerCase().includes(q)) &&
+    (!f || a.restaurants?.food_type === f)
+  ));
+}
+</script>
+</body>
+</html>
