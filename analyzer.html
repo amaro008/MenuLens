@@ -12,8 +12,8 @@
 <div id="app">
   <div class="loading-overlay" id="loadingOverlay">
     <div class="spinner"></div>
-    <div class="loading-title" id="loadingTitle">Analizando menú…</div>
-    <div class="loading-step"  id="loadingStep">Procesando con IA…</div>
+    <div class="loading-title" id="loadingTitle">Procesando…</div>
+    <div class="loading-step" id="loadingStep"></div>
   </div>
   <div id="toast"></div>
   <div class="topbar" id="topbar"></div>
@@ -23,18 +23,14 @@
     <div class="main-content">
       <div class="scrollable">
         <div class="content">
-          <div class="page-header">
-            <div>
-              <div class="page-title">Nuevo análisis</div>
-              <div class="page-sub">Sube el menú del restaurante para comenzar</div>
-            </div>
-          </div>
+          <div class="page-title">Nuevo análisis</div>
+          <div class="page-sub">Sube el menú y analiza con IA</div>
 
-          <!-- STEP 1 -->
+          <!-- STEP 1: INFO -->
           <div class="card">
             <div class="card-body">
-              <div class="card-title">1 · Datos del restaurante</div>
-              <div class="form-row" style="margin-bottom:12px">
+              <div class="card-title">1 · Datos del cliente</div>
+              <div class="form-row">
                 <div class="form-group">
                   <label class="form-label">Nombre comercial <span style="color:var(--red)">*</span></label>
                   <input class="form-input" id="bizName" placeholder="Ej: Mr. Ribs Bar & Grill" oninput="checkBtn()">
@@ -47,150 +43,16 @@
             </div>
           </div>
 
-          <!-- STEP 2 -->
+          <!-- STEP 2: UPLOAD -->
           <div class="card">
             <div class="card-body">
               <div class="card-title">2 · Sube el menú</div>
 
-            </div>
-          </div>
-
-          <!-- CATALOG STATUS -->
-          <div id="catalogWarning" style="display:none">
-            <div style="background:var(--yellow-l);border:1px solid #FDE047;border-radius:var(--r-s);padding:10px 14px;font-size:12px;color:#92610A;display:flex;align-items:center;gap:8px">
-              ⚠️ Sin catálogo de SKUs cargado. El análisis funcionará pero no habrá matching. <a href="admin-config.html" style="color:var(--red);font-weight:600">Cargar catálogo →</a>
-            </div>
-          </div>
-
-          <!-- ANALYZE BTN -->
-          <button class="btn btn-primary btn-block" style="padding:13px;font-size:15px" id="analyzeBtn" disabled onclick="startAnalysis()">
-            ✨ Analizar menú con IA
-          </button>
-          <div style="text-align:center;font-size:12px;color:var(--text-l)">Los resultados estarán listos en segundos</div>
-
-          <!-- DEBUG PANEL — visible durante análisis -->
-          <div id="debugPanel" style="display:none;background:#1a1a1a;color:#00ff88;font-family:monospace;font-size:11px;border-radius:8px;padding:12px;max-height:200px;overflow-y:auto;line-height:1.8"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<script src="js/supabase.js"></script>
-<script src="js/auth.js"></script>
-<script src="js/ui.js"></script>
-<script src="js/analyzer.js"></script>
-<script src="js/export.js"></script>
-
-<script>
-let _user = null;
-let _fileBase64 = null;
-let _fileType = null;
-let _file = null;
-
-(async () => {
-  _user = await requireAuth();
-  if (!_user) return;
-  renderTopbar(_user, false);
-  renderSidebar(currentPage, _user.role);
-
-  // Show advisor code banner if user has advisor_code
-  if (_user.advisor_code || _user.code) {
-    const banner = document.getElementById('advisorCodeBanner');
-    if (banner) {
-      banner.style.display = 'block';
-      document.getElementById('advisorName').textContent = _user.name || _user.email;
-      document.getElementById('advisorCode').textContent = _user.advisor_code || _user.code || '—';
-    }
-  }
-
-  // Load catalog
-  loadCatalogFromStorage();
-  if (!catalogData.length) {
-    document.getElementById('catalogWarning').style.display = 'block';
-  }
-
-  // Check Anthropic key
-  if (!Config.anthropicKey()) {
-    toast('⚠️ Configura el Anthropic API Key en el panel de admin', '');
-  }
-})();
-
-// ── FILE HANDLING ─────────────────────
-function checkBtn() {
-  const name = document.getElementById('bizName')?.value.trim();
-  const client = document.getElementById('bizClientNum')?.value.trim();
-  document.getElementById('analyzeBtn').disabled = !_fileBase64 || !name || !client;
-}
-
-// Drag & drop on upload zone
-document.addEventListener('DOMContentLoaded', () => {
-  const dz = document.getElementById('uploadZone');
-  if (!dz) return;
-  dz.addEventListener('dragover',  e => { e.preventDefault(); e.stopPropagation(); dz.classList.add('drag'); });
-  dz.addEventListener('dragleave', e => { e.preventDefault(); dz.classList.remove('drag'); });
-  dz.addEventListener('drop', e => {
-    e.preventDefault(); e.stopPropagation(); dz.classList.remove('drag');
-    if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
-  });
-});DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>MenuLens — Nuevo análisis</title>
-<link rel="stylesheet" href="css/main.css">
-<link rel="stylesheet" href="css/components.css">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-</head>
-<body>
-<div id="app">
-  <div class="loading-overlay" id="loadingOverlay">
-    <div class="spinner"></div>
-    <div class="loading-title" id="loadingTitle">Analizando menú…</div>
-    <div class="loading-step"  id="loadingStep">Procesando con IA…</div>
-  </div>
-  <div id="toast"></div>
-  <div class="topbar" id="topbar"></div>
-  <div class="topbar-accent"></div>
-  <div class="layout">
-    <div class="sidebar" id="sidebar"></div>
-    <div class="main-content">
-      <div class="scrollable">
-        <div class="content">
-          <div class="page-header">
-            <div>
-              <div class="page-title">Nuevo análisis</div>
-              <div class="page-sub">Sube el menú del restaurante para comenzar</div>
-            </div>
-          </div>
-
-          <!-- STEP 1 -->
-          <div class="card">
-            <div class="card-body">
-              <div class="card-title">1 · Datos del restaurante</div>
-              <div class="form-row" style="margin-bottom:12px">
-                <div class="form-group">
-                  <label class="form-label">Nombre comercial <span style="color:var(--red)">*</span></label>
-                  <input class="form-input" id="bizName" placeholder="Ej: Mr. Ribs Bar & Grill" oninput="checkBtn()">
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Número de cliente <span style="color:var(--red)">*</span></label>
-                  <input class="form-input" id="bizClientNum" placeholder="Ej: CLI-00234" oninput="checkBtn()">
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- STEP 2 -->
-          <div class="card">
-            <div class="card-body">
-              <div class="card-title">2 · Sube el menú</div>
-              <!-- Upload zone — click triggers hidden input -->
-              <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+              <!-- Drop zone -->
+              <div id="uploadZone" class="upload-zone" onclick="triggerFileInput()">
                 <div class="upload-icon">📄</div>
                 <div class="upload-title">Haz clic aquí para subir</div>
-                <div class="upload-sub">PDF o imágenes · múltiples archivos · máx 4MB c/u · o arrastra aquí</div>
+                <div class="upload-sub">PDF o imágenes · múltiples archivos · máx 4MB c/u</div>
                 <div class="upload-types">
                   <span class="type-tag">PDF</span>
                   <span class="type-tag">JPG</span>
@@ -198,30 +60,40 @@ document.addEventListener('DOMContentLoaded', () => {
                   <span class="type-tag">WEBP</span>
                 </div>
               </div>
-              <!-- Hidden file input outside the zone to avoid event conflicts -->
-              <input type="file" id="fileInput" accept=".pdf,image/*" multiple style="display:none" onchange="handleFiles(this.files)">
 
-              <!-- Multi-file list -->
+              <!-- File input — hidden, triggered by click on zone -->
+              <input type="file" id="fileInput" accept=".pdf,image/*" multiple
+                style="display:none" onchange="handleFiles(this.files)">
+
+              <!-- File list -->
               <div id="fileList" style="margin-top:10px;display:flex;flex-direction:column;gap:6px"></div>
-              <img id="previewImg" style="display:none;width:100%;max-height:180px;object-fit:contain;border-radius:var(--r-s);margin-top:8px;border:1px solid var(--border)">
+              <img id="previewImg" style="display:none;width:100%;max-height:180px;object-fit:contain;
+                border-radius:var(--r-s);margin-top:8px;border:1px solid var(--border)">
             </div>
           </div>
 
-          <!-- CATALOG STATUS -->
+          <!-- CATALOG WARNING -->
           <div id="catalogWarning" style="display:none">
-            <div style="background:var(--yellow-l);border:1px solid #FDE047;border-radius:var(--r-s);padding:10px 14px;font-size:12px;color:#92610A;display:flex;align-items:center;gap:8px">
-              ⚠️ Sin catálogo de SKUs cargado. El análisis funcionará pero no habrá matching. <a href="admin-config.html" style="color:var(--red);font-weight:600">Cargar catálogo →</a>
+            <div style="background:var(--yellow-l);border:1px solid #FDE047;border-radius:var(--r-s);
+              padding:10px 14px;font-size:12px;color:#92610A;display:flex;align-items:center;gap:8px">
+              ⚠️ Sin catálogo cargado. El análisis funcionará pero sin matching de SKUs.
+              <a href="admin-config.html" style="color:var(--red);font-weight:600;margin-left:auto">Cargar →</a>
             </div>
           </div>
 
-          <!-- ANALYZE BTN -->
-          <button class="btn btn-primary btn-block" style="padding:13px;font-size:15px" id="analyzeBtn" disabled onclick="startAnalysis()">
+          <!-- ANALYZE BUTTON -->
+          <button class="btn btn-primary btn-block" style="padding:13px;font-size:15px"
+            id="analyzeBtn" disabled onclick="startAnalysis()">
             ✨ Analizar menú con IA
           </button>
-          <div style="text-align:center;font-size:12px;color:var(--text-l)">Los resultados estarán listos en segundos</div>
+          <div style="text-align:center;font-size:12px;color:var(--text-l)">
+            Los resultados estarán listos en segundos
+          </div>
 
-          <!-- DEBUG PANEL — visible durante análisis -->
-          <div id="debugPanel" style="display:none;background:#1a1a1a;color:#00ff88;font-family:monospace;font-size:11px;border-radius:8px;padding:12px;max-height:200px;overflow-y:auto;line-height:1.8"></div>
+          <!-- DEBUG PANEL -->
+          <div id="debugPanel" style="display:none;background:#1a1a1a;color:#00ff88;
+            font-family:monospace;font-size:11px;border-radius:8px;padding:12px;
+            max-height:200px;overflow-y:auto;line-height:1.8"></div>
         </div>
       </div>
     </div>
@@ -232,52 +104,29 @@ document.addEventListener('DOMContentLoaded', () => {
 <script src="js/auth.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/analyzer.js"></script>
-<script src="js/export.js"></script>
 
 <script>
+// ── STATE ──────────────────────────────
 let _user = null;
+let _files = [];
 let _fileBase64 = null;
 let _fileType = null;
 let _file = null;
-
-(async () => {
-  _user = await requireAuth();
-  if (!_user) return;
-  renderTopbar(_user, false);
-  renderSidebar(currentPage, _user.role);
-
-  // Show advisor code banner if user has advisor_code
-  if (_user.advisor_code || _user.code) {
-    const banner = document.getElementById('advisorCodeBanner');
-    if (banner) {
-      banner.style.display = 'block';
-      document.getElementById('advisorName').textContent = _user.name || _user.email;
-      document.getElementById('advisorCode').textContent = _user.advisor_code || _user.code || '—';
-    }
-  }
-
-  // Load catalog
-  loadCatalogFromStorage();
-  if (!catalogData.length) {
-    document.getElementById('catalogWarning').style.display = 'block';
-  }
-
-  // Check Anthropic key
-  if (!Config.anthropicKey()) {
-    toast('⚠️ Configura el Anthropic API Key en el panel de admin', '');
-  }
-})();
-
-// ── FILE HANDLING ─────────────────────
-// Multi-file state
-let _files = [];
 let _currentFileIdx = 0;
+
+// ── FILE UPLOAD ────────────────────────
+function triggerFileInput() {
+  document.getElementById('fileInput').click();
+}
 
 function handleFiles(fileList) {
   if (!fileList || !fileList.length) return;
   const MAX = 4 * 1024 * 1024;
   Array.from(fileList).forEach(file => {
-    if (file.size > MAX) { toast(`${file.name} supera 4MB — omitido`, 'error'); return; }
+    if (file.size > MAX) {
+      toast(file.name + ' supera 4MB — omitido', 'error');
+      return;
+    }
     const reader = new FileReader();
     reader.onload = e => {
       const base64 = e.target.result.split(',')[1];
@@ -288,138 +137,108 @@ function handleFiles(fileList) {
     };
     reader.readAsDataURL(file);
   });
-}
-
-function handleFileSelect(file) { if (file) handleFiles([file]); }
-
-function renderFileList() {
-  const el = document.getElementById('fileList');
-  if (!el) return;
-  el.innerHTML = _files.map((f, i) => `
-    <div style="display:flex;align-items:center;gap:8px;background:var(--gray-l);border-radius:var(--r-s);padding:8px 10px;border:1px solid ${i===_currentFileIdx?'var(--red)':'transparent'}">
-      <span style="font-size:16px">${f.type==='application/pdf'?'📄':'🖼'}</span>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.name}</div>
-        <div style="font-size:10px;color:var(--text-m)">${(f.size/1024).toFixed(0)} KB${i===_currentFileIdx?' · <span style=color:var(--red)>Activo</span>':''}</div>
-      </div>
-      ${i!==_currentFileIdx?`<button onclick="setActiveFile(${i})" style="font-size:11px;color:var(--text-m);background:none;border:0.5px solid var(--border);border-radius:4px;padding:2px 6px;cursor:pointer">Usar</button>`:''}
-      <button onclick="removeFile(${i})" style="font-size:16px;color:var(--text-m);background:none;border:none;cursor:pointer">✕</button>
-    </div>`).join('');
+  // Reset input so same file can be re-selected
+  document.getElementById('fileInput').value = '';
 }
 
 function setActiveFile(idx) {
   _currentFileIdx = idx;
   const f = _files[idx];
-  _fileBase64 = f.base64; _fileType = f.type;
+  _fileBase64 = f.base64;
+  _fileType = f.type;
   const img = document.getElementById('previewImg');
-  if (f.type.startsWith('image/')) { img.src = 'data:'+f.type+';base64,'+f.base64; img.style.display='block'; }
-  else img.style.display = 'none';
+  if (f.type.startsWith('image/')) {
+    img.src = 'data:' + f.type + ';base64,' + f.base64;
+    img.style.display = 'block';
+  } else {
+    img.style.display = 'none';
+  }
   renderFileList();
   checkBtn();
 }
 
-function removeFile(idx) {
-  _files.splice(idx, 1);
-  if (!_files.length) { clearFile(); return; }
-  _currentFileIdx = Math.min(_currentFileIdx, _files.length-1);
-  setActiveFile(_currentFileIdx);
+function renderFileList() {
+  const el = document.getElementById('fileList');
+  if (!el || !_files.length) return;
+  el.innerHTML = _files.map((f, i) => {
+    const active = i === _currentFileIdx;
+    return '<div style="display:flex;align-items:center;gap:8px;background:var(--gray-l);' +
+      'border-radius:var(--r-s);padding:8px 10px;border:1px solid ' +
+      (active ? 'var(--red)' : 'transparent') + '">' +
+      '<span style="font-size:16px">' + (f.type === 'application/pdf' ? '📄' : '🖼') + '</span>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + f.name + '</div>' +
+        '<div style="font-size:10px;color:var(--text-m)">' + Math.round(f.size/1024) + ' KB' +
+          (active ? ' · <span style="color:var(--red)">Activo</span>' : '') + '</div>' +
+      '</div>' +
+      (!active ? '<button onclick="setActiveFile(' + i + ')" style="font-size:11px;color:var(--text-m);background:none;border:0.5px solid var(--border);border-radius:4px;padding:2px 6px;cursor:pointer">Usar</button>' : '') +
+      '<button onclick="removeFile(' + i + ')" style="font-size:16px;color:var(--text-m);background:none;border:none;cursor:pointer;line-height:1">✕</button>' +
+      '</div>';
+  }).join('');
 }
 
-function clearFile() {
-  _files = []; _fileBase64 = null; _fileType = null; _currentFileIdx = 0;
-  const fl = document.getElementById('fileList'); if(fl) fl.innerHTML = '';
-  const img = document.getElementById('previewImg'); if(img) img.style.display='none';
-  const fi = document.getElementById('fileInput'); if(fi) fi.value='';
+function removeFile(idx) {
+  _files.splice(idx, 1);
+  if (!_files.length) {
+    _fileBase64 = null; _fileType = null; _currentFileIdx = 0;
+    document.getElementById('fileList').innerHTML = '';
+    document.getElementById('previewImg').style.display = 'none';
+  } else {
+    _currentFileIdx = Math.min(_currentFileIdx, _files.length - 1);
+    setActiveFile(_currentFileIdx);
+  }
   checkBtn();
 }
 
-function checkBtn() {
-  const name = document.getElementById('bizName')?.value.trim();
-  const client = document.getElementById('bizClientNum')?.value.trim();
-  document.getElementById('analyzeBtn').disabled = !_fileBase64 || !name || !client;
-}
-
-// Drag & drop + click fallback
-// drag/drop handled by DOMContentLoaded listener above
-// Click fallback — in case input isn't covering the whole zone
-dz.addEventListener('click', e => {
-  if (e.target !== document.getElementById('fileInput')) {
-    document.getElementById('fileInput').click();
+// ── DRAG & DROP ────────────────────────
+(function() {
+  function ready(fn) {
+    if (document.readyState !== 'loading') fn();
+    else document.addEventListener('DOMContentLoaded', fn);
   }
-});
-
-// ── MAPS LINK ─────────────────────────
-
-  // Open Maps in new tab
-  window.open(`https://www.google.com/maps/search/?api=1&query=${q}`, '_blank');
-  // Show embedded map
-  showMapEmbed(q);
-  document.getElementById('bizConfirmed').style.display = 'block';
-  document.getElementById('bizConfirmedText').textContent = `"${name}" — confirma en la pestaña de Maps y regresa aquí`;
-}
-
-`;
-  // Use Google Maps embed (works without key for basic embed)
-  frame.src = `https://maps.google.com/maps?q=${query}&output=embed&z=15`;
-  container.style.display = 'block';
-}
-
-
-      // Reverse geocode using nominatim (free, no API key)
-      try {
-        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`, {
-          headers: { 'Accept-Language': 'es' }
-        });
-        const data = await r.json();
-        const addr = data.address || {};
-        const street = addr.road || addr.pedestrian || '';
-        const num = addr.house_number || '';
-        const suburb = addr.suburb || addr.neighbourhood || addr.quarter || '';
-        const city = addr.city || addr.town || addr.village || '';
-        const state = addr.state || '';
-        const fullAddr = [street + (num ? ' ' + num : ''), suburb, city, state].filter(Boolean).join(', ');
-
-        // Fill fields
-        if (city && !document.getElementById('bizCity').value) {
-          document.getElementById('bizCity').value = city;
-        }
-        if (suburb && !document.getElementById('bizZone').value) {
-          document.getElementById('bizZone').value = suburb;
-        }
-
-        document.getElementById('geoInfo').style.display = 'block';
-        document.getElementById('geoInfoText').textContent = `📍 ${fullAddr} — (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
-
-        // Show map at coordinates
-        const frame = document.getElementById('mapFrame');
-        frame.src = `https://maps.google.com/maps?q=${lat},${lng}&output=embed&z=16`;
-        document.getElementById('mapContainer').style.display = 'block';
-
-        toast('✅ Ubicación obtenida', 'success');
-      } catch(e) {
-        // At least show coordinates
-        document.getElementById('geoInfo').style.display = 'block';
-        document.getElementById('geoInfoText').textContent = `Coordenadas: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-        const frame = document.getElementById('mapFrame');
-        frame.src = `https://maps.google.com/maps?q=${lat},${lng}&output=embed&z=16`;
-        document.getElementById('mapContainer').style.display = 'block';
+  ready(function() {
+    var zone = document.getElementById('uploadZone');
+    if (!zone) return;
+    zone.addEventListener('dragover', function(e) {
+      e.preventDefault(); e.stopPropagation();
+      zone.classList.add('drag');
+    });
+    zone.addEventListener('dragleave', function(e) {
+      e.preventDefault();
+      zone.classList.remove('drag');
+    });
+    zone.addEventListener('drop', function(e) {
+      e.preventDefault(); e.stopPropagation();
+      zone.classList.remove('drag');
+      if (e.dataTransfer && e.dataTransfer.files.length) {
+        handleFiles(e.dataTransfer.files);
       }
-    },
-    (err) => toast('Error de geolocalización: ' + err.message, 'error'),
-    { enableHighAccuracy: true, timeout: 10000 }
-  );
+    });
+  });
+})();
+
+// ── FORM ───────────────────────────────
+function checkBtn() {
+  const name   = (document.getElementById('bizName')?.value || '').trim();
+  const client = (document.getElementById('bizClientNum')?.value || '').trim();
+  document.getElementById('analyzeBtn').disabled = !_fileBase64 || !name || !client;
 }
 
 // ── ANALYSIS ──────────────────────────
 async function startAnalysis() {
   if (!_fileBase64) { toast('Sube un menú primero', 'error'); return; }
 
-  // Reset debug log
+  // Reset debug
   try { sessionStorage.removeItem('ml_debug_log'); } catch(e) {}
   const dp = document.getElementById('debugPanel');
   if (dp) { dp.innerHTML = ''; dp.style.display = 'none'; }
 
-  // Load catalog from Supabase (with localStorage fallback)
+  const bizClientNum = (document.getElementById('bizClientNum')?.value || '').trim();
+  const bizName      = (document.getElementById('bizName')?.value || '').trim() || 'Restaurante';
+  const bizCity      = '';
+  const bizZone      = '';
+
+  // Load catalog from Supabase
   showLoading('Cargando catálogo...', 'Consultando base de datos...');
   await loadCatalogFromSupabase();
   hideLoading();
@@ -429,16 +248,10 @@ async function startAnalysis() {
     return;
   }
 
-  const bizClientNum = document.getElementById('bizClientNum')?.value.trim() || '';
-  const bizName = document.getElementById('bizName').value.trim() || 'Restaurante';
-  const bizCity = '';
-  const bizZone = '';
   const startTime = Date.now();
-
-  showLoading('Analizando menú…', '🧠 Extrayendo platillos e ingredientes…');
+  showLoading('Analizando menú con IA…', 'Claude está leyendo el menú…');
 
   try {
-    setLoadingStep('📦 Comparando con catálogo de productos…');
     const result = await callClaudeAnalysis(_fileBase64, _fileType, bizName, bizCity);
 
     const fullData = {
@@ -451,18 +264,43 @@ async function startAnalysis() {
       userName: _user?.name || '',
     };
 
-    setLoadingStep('💾 Guardando en base de conocimiento…');
-    await saveAnalysisToDB(fullData, _user);
+    // Save to DB
+    if (getSupabase()) {
+      showLoading('Guardando resultados…', '');
+      await saveAnalysisToDB(fullData, _user);
+    }
 
-    storeCurrentAnalysis(fullData);
+    sessionStorage.setItem('ml_current_analysis', JSON.stringify(fullData));
     hideLoading();
     window.location.href = 'results.html';
+
   } catch(e) {
     hideLoading();
-    toast('Error: ' + e.message, 'error');
-    console.error(e);
+    toast('Error en el análisis: ' + e.message, 'error');
   }
 }
+
+// ── INIT ──────────────────────────────
+(async () => {
+  _user = await requireAuth();
+  if (!_user) return;
+  renderTopbar(_user, false);
+  renderSidebar(currentPage, _user.role);
+
+  // Show advisor info if available
+  if (_user.advisor_code) {
+    const banner = document.createElement('div');
+    banner.style.cssText = 'background:var(--blue-l);border:1px solid #93C5FD;border-radius:var(--r-s);padding:8px 12px;font-size:12px;color:#1E40AF;margin-bottom:12px';
+    banner.innerHTML = '👤 Asesor: <strong>' + (_user.name||_user.email) + '</strong> — Código: <strong>' + _user.advisor_code + '</strong>';
+    const content = document.querySelector('.content');
+    if (content) content.insertBefore(banner, content.children[2]);
+  }
+
+  loadCatalogFromStorage();
+  if (!catalogData.length) {
+    document.getElementById('catalogWarning').style.display = 'block';
+  }
+})();
 </script>
 </body>
 </html>
