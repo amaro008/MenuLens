@@ -121,25 +121,23 @@
       toast('Credenciales incorrectas', 'error');
       return;
     }
-    // Retry up to 3 times — trigger may take a moment to create the profile
+    console.log('AUTH OK uid:', data.user.id);
     let profile = null;
     for (let i = 0; i < 3; i++) {
-      const { data: p } = await sb.from('users').select('role').eq('id', data.user.id).single();
+      const { data: p, error: perr } = await sb.from('users').select('role').eq('id', data.user.id).single();
+      console.log('Attempt', i+1, 'profile:', p, 'err:', perr?.message);
       if (p) { profile = p; break; }
       await new Promise(r => setTimeout(r, 800));
     }
-    // If profile still missing, insert it now
+    console.log('Final profile:', profile);
     if (!profile) {
-      await sb.from('users').insert({
-        id: data.user.id,
-        email: data.user.email,
-        name: data.user.email.split('@')[0],
-        role: 'advisor'
-      });
+      const ins = await sb.from('users').insert({ id: data.user.id, email: data.user.email, name: data.user.email.split('@')[0], role: 'advisor' });
+      console.log('Insert result:', ins);
       profile = { role: 'advisor' };
     }
     hideLoading();
     const role = profile.role || 'advisor';
+    console.log('Role:', role, '-> redirecting');
     window.location.href = ['admin', 'supervisor'].includes(role) ? 'admin-kpi.html' : 'dashboard.html';
   }
 
