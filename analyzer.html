@@ -36,21 +36,43 @@
               <div class="card-title">1 · Datos del restaurante</div>
               <div class="form-row" style="margin-bottom:12px">
                 <div class="form-group">
-                  <label class="form-label">Nombre del restaurante</label>
-                  <input class="form-input" id="bizName" placeholder="Ej: La Trattoria del Centro">
+                  <label class="form-label">Número de cliente <span style="color:var(--red)">*</span></label>
+                  <input class="form-input" id="bizClientNum" placeholder="Ej: 100234" oninput="checkAnalyzeBtn()">
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Ciudad (opcional)</label>
-                  <input class="form-input" id="bizCity" placeholder="Ej: Ciudad de México">
+                  <label class="form-label">Nombre comercial <span style="color:var(--red)">*</span></label>
+                  <input class="form-input" id="bizName" placeholder="Ej: La Trattoria del Centro" oninput="checkAnalyzeBtn()">
                 </div>
               </div>
-              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                <button class="btn btn-outline btn-sm" onclick="openMaps()">
-                  🗺 Buscar en Google Maps
-                </button>
-                <span style="font-size:11px;color:var(--text-l)">Abre Maps para confirmar el negocio</span>
+              <div class="form-row" style="margin-bottom:12px">
+                <div class="form-group">
+                  <label class="form-label">Ciudad</label>
+                  <input class="form-input" id="bizCity" placeholder="Ej: Ciudad de México">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Zona / Colonia</label>
+                  <input class="form-input" id="bizZone" placeholder="Ej: Roma Norte">
+                </div>
               </div>
-              <div id="bizConfirmed" style="display:none;margin-top:10px;background:var(--green-l);border:1px solid #86EFAC;border-radius:var(--r-s);padding:9px 12px;font-size:12px;color:#15803D">
+
+              <!-- MAPS SECTION -->
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+                <button class="btn btn-outline btn-sm" onclick="openMaps()">🗺 Buscar en Google Maps</button>
+                <button class="btn btn-outline btn-sm" onclick="geolocate()">📍 Usar mi ubicación</button>
+                <span style="font-size:11px;color:var(--text-l)">Para enriquecer el perfil del negocio</span>
+              </div>
+
+              <!-- MAP EMBED -->
+              <div id="mapContainer" style="display:none;border-radius:var(--r-s);overflow:hidden;border:1px solid var(--border);margin-bottom:10px">
+                <iframe id="mapFrame" width="100%" height="200" style="border:0;display:block" allowfullscreen loading="lazy"></iframe>
+              </div>
+
+              <!-- GEO INFO -->
+              <div id="geoInfo" style="display:none;background:var(--blue-l);border:1px solid #93C5FD;border-radius:var(--r-s);padding:9px 12px;font-size:12px;color:#1E40AF;margin-bottom:8px">
+                📍 <span id="geoInfoText"></span>
+              </div>
+
+              <div id="bizConfirmed" style="display:none;background:var(--green-l);border:1px solid #86EFAC;border-radius:var(--r-s);padding:9px 12px;font-size:12px;color:#15803D">
                 ✓ <span id="bizConfirmedText"></span>
               </div>
             </div>
@@ -138,7 +160,13 @@ let _file = null;
 // ── FILE HANDLING ─────────────────────
 function handleFileSelect(file) {
   if (!file) return;
-  if (file.size > 20 * 1024 * 1024) { toast('El archivo supera 20MB', 'error'); return; }
+  // Vercel free plan: 4.5MB limit on serverless functions
+  // We allow up to 4MB to be safe
+  const maxSize = 4 * 1024 * 1024;
+  if (file.size > maxSize) {
+    toast('El archivo supera 4MB. Comprime el PDF o usa una imagen JPG/PNG del menú.', 'error');
+    return;
+  }
   _file = file;
   _fileType = file.type;
   const isImg = file.type.startsWith('image/');
@@ -168,7 +196,9 @@ function clearFile() {
 }
 
 function checkBtn() {
-  document.getElementById('analyzeBtn').disabled = !_fileBase64;
+  const clientNum = document.getElementById('bizClientNum')?.value.trim();
+  const name = document.getElementById('bizName')?.value.trim();
+  document.getElementById('analyzeBtn').disabled = !_fileBase64 || !clientNum || !name;
 }
 
 // Drag & drop
@@ -184,13 +214,76 @@ dz.addEventListener('drop', e => {
 function openMaps() {
   const name = document.getElementById('bizName').value.trim();
   const city = document.getElementById('bizCity').value.trim();
-  if (!name) { toast('Escribe el nombre del restaurante primero', 'error'); return; }
-  const q = encodeURIComponent(name + (city ? ' ' + city : ''));
+  const zone = document.getElementById('bizZone').value.trim();
+  if (!name) { toast('Escribe el nombre comercial primero', 'error'); return; }
+  const q = encodeURIComponent([name, zone, city].filter(Boolean).join(', '));
+  // Open Maps in new tab
   window.open(`https://www.google.com/maps/search/?api=1&query=${q}`, '_blank');
-  setTimeout(() => {
-    document.getElementById('bizConfirmed').style.display = 'block';
-    document.getElementById('bizConfirmedText').textContent = `"${name}" buscado en Google Maps`;
-  }, 400);
+  // Show embedded map
+  showMapEmbed(q);
+  document.getElementById('bizConfirmed').style.display = 'block';
+  document.getElementById('bizConfirmedText').textContent = `"${name}" — confirma en la pestaña de Maps y regresa aquí`;
+}
+
+function showMapEmbed(query) {
+  const frame = document.getElementById('mapFrame');
+  const container = document.getElementById('mapContainer');
+  // Use OpenStreetMap embed (free, no API key needed)
+  frame.src = `https://www.openstreetmap.org/export/embed.html?bbox=-180,-90,180,90&layer=mapnik&marker=0,0&query=${query}`;
+  // Use Google Maps embed (works without key for basic embed)
+  frame.src = `https://maps.google.com/maps?q=${query}&output=embed&z=15`;
+  container.style.display = 'block';
+}
+
+function geolocate() {
+  if (!navigator.geolocation) { toast('Geolocalización no disponible en este navegador', 'error'); return; }
+  toast('Obteniendo ubicación...', '');
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      const { latitude: lat, longitude: lng } = pos.coords;
+      // Reverse geocode using nominatim (free, no API key)
+      try {
+        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`, {
+          headers: { 'Accept-Language': 'es' }
+        });
+        const data = await r.json();
+        const addr = data.address || {};
+        const street = addr.road || addr.pedestrian || '';
+        const num = addr.house_number || '';
+        const suburb = addr.suburb || addr.neighbourhood || addr.quarter || '';
+        const city = addr.city || addr.town || addr.village || '';
+        const state = addr.state || '';
+        const fullAddr = [street + (num ? ' ' + num : ''), suburb, city, state].filter(Boolean).join(', ');
+
+        // Fill fields
+        if (city && !document.getElementById('bizCity').value) {
+          document.getElementById('bizCity').value = city;
+        }
+        if (suburb && !document.getElementById('bizZone').value) {
+          document.getElementById('bizZone').value = suburb;
+        }
+
+        document.getElementById('geoInfo').style.display = 'block';
+        document.getElementById('geoInfoText').textContent = `📍 ${fullAddr} — (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+
+        // Show map at coordinates
+        const frame = document.getElementById('mapFrame');
+        frame.src = `https://maps.google.com/maps?q=${lat},${lng}&output=embed&z=16`;
+        document.getElementById('mapContainer').style.display = 'block';
+
+        toast('✅ Ubicación obtenida', 'success');
+      } catch(e) {
+        // At least show coordinates
+        document.getElementById('geoInfo').style.display = 'block';
+        document.getElementById('geoInfoText').textContent = `Coordenadas: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        const frame = document.getElementById('mapFrame');
+        frame.src = `https://maps.google.com/maps?q=${lat},${lng}&output=embed&z=16`;
+        document.getElementById('mapContainer').style.display = 'block';
+      }
+    },
+    (err) => toast('Error de geolocalización: ' + err.message, 'error'),
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
 }
 
 // ── ANALYSIS ──────────────────────────
@@ -198,8 +291,11 @@ async function startAnalysis() {
   if (!_fileBase64) { toast('Sube un menú primero', 'error'); return; }
   if (!Config.anthropicKey()) { toast('Configura el Anthropic API Key en el panel admin', 'error'); return; }
 
+  const bizClientNum = document.getElementById('bizClientNum').value.trim();
   const bizName = document.getElementById('bizName').value.trim() || 'Restaurante';
   const bizCity = document.getElementById('bizCity').value.trim();
+  const bizZone = document.getElementById('bizZone').value.trim();
+  if (!bizClientNum) { toast('El número de cliente es obligatorio', 'error'); return; }
   const startTime = Date.now();
 
   showLoading('Analizando menú…', '🧠 Extrayendo platillos e ingredientes…');
@@ -211,6 +307,8 @@ async function startAnalysis() {
     const fullData = {
       ...result,
       bizName, bizCity,
+      bizZone: bizZone || '',
+      bizClientNum: bizClientNum || '',
       duration: Date.now() - startTime,
       timestamp: new Date().toISOString(),
       userName: _user?.name || '',

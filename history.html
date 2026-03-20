@@ -51,7 +51,7 @@
             <div class="table-wrap">
               <table>
                 <thead>
-                  <tr><th>Restaurante</th><th>Tipo</th><th>Ciudad</th><th>Fecha</th><th>Platillos</th><th>SKUs</th><th>Estado</th><th></th></tr>
+                  <tr><th>Cliente #</th><th>Nombre comercial</th><th>Tipo</th><th>Ciudad</th><th>Fecha</th><th>Platillos</th><th>SKUs</th><th>Estado</th><th></th></tr>
                 </thead>
                 <tbody id="histBody">
                   <tr><td colspan="8" style="text-align:center;color:var(--text-l);padding:32px">Sin análisis aún</td></tr>
@@ -92,7 +92,7 @@ async function loadHistory(user) {
 
   showLoading('Cargando historial…', '');
   const { data } = await sb.from('analyses')
-    .select('id, created_at, status, dish_count, sku_count, restaurants(name, city, food_type)')
+    .select('id, created_at, status, dish_count, sku_count, client_number, restaurants(name, city, zone, food_type)')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false });
   hideLoading();
@@ -103,9 +103,10 @@ async function loadHistory(user) {
 function renderTable(data) {
   const rows = data.map(a => `
     <tr>
+      <td><span class="badge badge-blue" style="font-size:10px">${a.client_number || '—'}</span></td>
       <td><div class="td-main">${a.restaurants?.name || '—'}</div></td>
       <td><span class="badge badge-yellow">${a.restaurants?.food_type || '—'}</span></td>
-      <td>${a.restaurants?.city || '—'}</td>
+      <td>${[a.restaurants?.zone, a.restaurants?.city].filter(Boolean).join(', ') || '—'}</td>
       <td>${formatDate(a.created_at)}</td>
       <td>${a.dish_count || '—'}</td>
       <td>${a.sku_count || '—'}</td>
@@ -128,9 +129,9 @@ Esta acción no se puede deshacer.`)) return;
 }
 
 async function deleteAnalysis(id) {
-  const sb = getSupabase();
+  // Demo mode
+  const sb = await getSupabaseAsync();
   if (!sb) {
-    // Demo mode — remove from local array
     _allData = _allData.filter(a => a.id !== id);
     renderTable(_allData);
     toast('✅ Análisis eliminado', 'success');
@@ -138,17 +139,22 @@ async function deleteAnalysis(id) {
   }
   showLoading('Eliminando análisis…', '');
   try {
-    // Delete related records first (FK constraints)
-    await sb.from('ingredients').delete().eq('analysis_id', id);
-    await sb.from('sku_matches').delete().eq('analysis_id', id);
-    await sb.from('menu_items').delete().eq('analysis_id', id);
-    await sb.from('analyses').delete().eq('id', id);
+    // Delete child records first to avoid FK constraint errors
+    const dels = [
+      sb.from('ingredients').delete().eq('analysis_id', id),
+      sb.from('sku_matches').delete().eq('analysis_id', id),
+      sb.from('menu_items').delete().eq('analysis_id', id)
+    ];
+    await Promise.all(dels);
+    const { error } = await sb.from('analyses').delete().eq('id', id);
+    if (error) throw new Error(error.message);
     hideLoading();
     _allData = _allData.filter(a => a.id !== id);
     renderTable(_allData);
     toast('✅ Análisis eliminado', 'success');
   } catch(e) {
     hideLoading();
+    console.error('Delete error:', e);
     toast('Error al eliminar: ' + e.message, 'error');
   }
 }
