@@ -67,7 +67,10 @@ function buildSmartCatalogSummary() {
 // ── BUILD SYSTEM PROMPT ───────────────
 function buildSystemPrompt() {
   const catalogSummary = buildSmartCatalogSummary();
+  return buildSystemPromptWithCatalog(catalogSummary);
+}
 
+function buildSystemPromptWithCatalog(catalogSummary) {
   return `Eres un experto analizador de menús de restaurantes para distribuidoras de alimentos. Sigues reglas estrictas.
 
 CATÁLOGO DE PRODUCTOS DISPONIBLE:
@@ -193,6 +196,26 @@ CERO texto antes o después. CERO bloques de código. CERO explicaciones. SOLO e
 }`;
 }
 
+// ── REDUCED PROMPT (fallback when catalog is too large) ──
+function buildReducedPrompt() {
+  // Send only top 200 protein products + 100 others
+  const PRIORITY = ['RES','AVES','PESCADOS Y MARISCOS','CERDO','CARNES FRIAS','CORDERO Y OTROS'];
+  const priority = catalogData
+    .filter(r => PRIORITY.includes((r.Familia||r.familia||'').toUpperCase()))
+    .slice(0, 200);
+  const others = catalogData
+    .filter(r => !PRIORITY.includes((r.Familia||r.familia||'').toUpperCase()))
+    .slice(0, 100);
+  const reduced = [...priority, ...others];
+  console.log(`Reduced catalog: ${reduced.length} products`);
+
+  const catalogSummary = reduced.map(r =>
+    `SKU:${r.SKU||r.sku||''}|Material:${r.Material||r.material||''}|Marca:${r.Marca||r.marca||''}|Familia:${(r.Familia||r.familia||'').toUpperCase()}|Sublinea:${r['Sublínea']||r.sublinea||''}`
+  ).join('\n');
+
+  return buildSystemPromptWithCatalog(catalogSummary);
+}
+
 // ── CALL CLAUDE API via Vercel proxy ──
 async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
   const mediaType = fileType === 'application/pdf' ? 'application/pdf' : (fileType || 'image/jpeg');
@@ -209,6 +232,18 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
     }
   ];
 
+  // Build prompt and check size
+  const systemPrompt = buildSystemPrompt();
+  const approxTokens = Math.round(systemPrompt.length / 4);
+  console.log(`System prompt size: ~${approxTokens} tokens (${systemPrompt.length} chars)`);
+
+  // If prompt is too large, use a smaller catalog sample
+  let finalPrompt = systemPrompt;
+  if (approxTokens > 60000) {
+    console.warn('Prompt too large, using reduced catalog...');
+    finalPrompt = buildReducedPrompt();
+  }
+
   // Llamar a /api/analyze (proxy serverless en Vercel — evita CORS)
   const resp = await fetch('/api/analyze', {
     method: 'POST',
@@ -216,7 +251,7 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 8096,
-      system: buildSystemPrompt(),
+      system: finalPrompt,
       messages: [{ role: 'user', content: userContent }]
     })
   });
