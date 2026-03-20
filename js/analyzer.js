@@ -239,11 +239,9 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
   if (!parsed) {
     try {
       const stripped = raw
-        .replace(/^```[\w\s]*
-?/im, '')
+        .replace(/^```[\w ]*[\r\n]*/im, '')
         .replace(/```[\s]*$/im, '')
-        .replace(/^~~~[\w\s]*
-?/im, '')
+        .replace(/^~~~[\w ]*[\r\n]*/im, '')
         .replace(/~~~[\s]*$/im, '')
         .trim();
       parsed = JSON.parse(stripped);
