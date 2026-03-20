@@ -405,10 +405,22 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
     finalPrompt = buildReducedPrompt();
   }
 
+  // Get current session JWT for auth header
+  let authHeader = {};
+  try {
+    const sb = await getSupabaseAsync();
+    if (sb) {
+      const { data: { session } } = await sb.auth.getSession();
+      if (session?.access_token) {
+        authHeader = { 'Authorization': `Bearer ${session.access_token}` };
+      }
+    }
+  } catch(e) { /* continue without auth in demo mode */ }
+
   // Llamar a /api/analyze (proxy serverless en Vercel — evita CORS)
   const resp = await fetch('/api/analyze', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeader },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 16000,

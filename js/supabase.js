@@ -66,7 +66,7 @@ function _applyConfig(data) {
   if (data.supabaseUrl) localStorage.setItem('ml_supabase_url', data.supabaseUrl);
   if (data.supabaseKey) localStorage.setItem('ml_supabase_key', data.supabaseKey);
   if (data.companyName) localStorage.setItem('ml_company_name', data.companyName);
-  if (data.anthropicKey) localStorage.setItem('ml_anthropic_key', data.anthropicKey);
+  // anthropicKey NOT cached in localStorage — stays server-side only
   _initSupabaseClient(data);
 }
 
@@ -97,7 +97,7 @@ async function _refreshConfigBg() {
       if (data.supabaseUrl) localStorage.setItem('ml_supabase_url', data.supabaseUrl);
       if (data.supabaseKey) localStorage.setItem('ml_supabase_key', data.supabaseKey);
       if (data.companyName) localStorage.setItem('ml_company_name', data.companyName);
-      if (data.anthropicKey) localStorage.setItem('ml_anthropic_key', data.anthropicKey);
+      // anthropicKey NOT cached in localStorage — stays server-side only
     }
   } catch(e) { /* silent */ }
 }
@@ -128,7 +128,7 @@ const Config = {
     if (window._mlConfig) window._mlConfig[key] = val;
   },
   companyName: () => window._mlConfig?.companyName || localStorage.getItem('ml_company_name') || 'MenuLens',
-  anthropicKey: () => window._mlConfig?.anthropicKey || localStorage.getItem('ml_anthropic_key') || '',
+  anthropicKey: () => '', // Anthropic key is server-side only — never exposed to frontend
 };
 
 // ── SESSION CACHE ─────────────────────
