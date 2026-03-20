@@ -279,6 +279,7 @@ async function saveAnalysisToDB(analysisData, user) {
   const { data: rest, error: restErr } = await sb.from('restaurants').upsert({
     name: biz,
     city: analysisData.bizCity || null,
+    zone: analysisData.bizZone || null,
     food_type: analysisData.food_type || null,
     maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(biz)}`,
     price_tier: pa.price_tier || null,
@@ -294,6 +295,7 @@ async function saveAnalysisToDB(analysisData, user) {
   const { data: analysis, error: anaErr } = await sb.from('analyses').insert({
     user_id: user.id,
     restaurant_id: rest?.id || null,
+    client_number: analysisData.bizClientNum || null,
     status: 'complete',
     duration_ms: analysisData.duration || 0,
     dish_count: analysisData.summary?.total_dishes || 0,
