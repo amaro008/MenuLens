@@ -58,6 +58,8 @@
 
           <!-- TAB 0: RESUMEN -->
           <div id="tab0">
+            <!-- PRICE BREAKDOWN -->
+            <div id="priceBreakdown" style="display:none;background:white;border:1px solid var(--border);border-radius:var(--r);padding:16px;box-shadow:var(--shadow)"></div>
             <div class="result-summary" id="sumCards"></div>
             <div class="card">
               <div class="card-body">
@@ -191,6 +193,46 @@ function renderAll(d) {
   const mapsLink = document.getElementById('resMapsLink');
   mapsLink.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(d.restaurant_name || d.bizName || '')}`;
   mapsLink.style.display = 'inline';
+
+  // Price analysis
+  const pa = d.price_analysis || {};
+  const tierColors = { economico: '#16A34A', medio: '#D97706', premium: '#C8102E' };
+  const tierLabels = { economico: '💚 Económico', medio: '🟡 Nivel medio', premium: '🔴 Premium' };
+  const tierColor = tierColors[pa.price_tier] || '#6B7280';
+  const tierLabel = tierLabels[pa.price_tier] || pa.price_tier || '—';
+  const hasPrice = pa.avg_entradas || pa.avg_platillos || pa.avg_postres;
+  const pb = document.getElementById('priceBreakdown');
+  if (pb) {
+    pb.style.display = hasPrice ? 'block' : 'none';
+    if (hasPrice) {
+      pb.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+          <div style="font-size:14px;font-weight:700">💰 Análisis de precios <span style="font-size:11px;color:var(--text-m)">(sin bebidas)</span></div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="width:9px;height:9px;border-radius:50%;background:${tierColor};display:inline-block"></span>
+            <span style="font-size:13px;font-weight:600;color:${tierColor}">${tierLabel}</span>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px">
+          <div style="background:var(--gray-l);border-radius:var(--r-s);padding:12px;text-align:center">
+            <div style="font-size:20px;font-weight:700;color:var(--text)">${pa.avg_entradas ? '$'+Math.round(pa.avg_entradas) : '—'}</div>
+            <div style="font-size:11px;color:var(--text-m);margin-top:2px">Prom. Entradas</div>
+          </div>
+          <div style="background:var(--red-l);border-radius:var(--r-s);padding:12px;text-align:center">
+            <div style="font-size:20px;font-weight:700;color:var(--red)">${pa.avg_platillos ? '$'+Math.round(pa.avg_platillos) : '—'}</div>
+            <div style="font-size:11px;color:var(--text-m);margin-top:2px">Prom. Platillos</div>
+          </div>
+          <div style="background:var(--gray-l);border-radius:var(--r-s);padding:12px;text-align:center">
+            <div style="font-size:20px;font-weight:700;color:var(--text)">${pa.avg_postres ? '$'+Math.round(pa.avg_postres) : '—'}</div>
+            <div style="font-size:11px;color:var(--text-m);margin-top:2px">Prom. Postres</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${pa.dominant_protein ? `<div style="background:var(--red-l);border-radius:var(--r-s);padding:6px 10px;font-size:12px"><span style="color:var(--text-m)">Proteína dominante:</span> <strong style="color:var(--red)">${pa.dominant_protein}</strong></div>` : ''}
+          ${pa.menu_diversity ? `<div style="background:var(--gray-l);border-radius:var(--r-s);padding:6px 10px;font-size:12px"><span style="color:var(--text-m)">Diversidad:</span> <strong>${pa.menu_diversity}/10</strong></div>` : ''}
+        </div>`;
+    }
+  }
 
   // Summary cards
   document.getElementById('sumCards').innerHTML = `
