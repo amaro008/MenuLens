@@ -196,48 +196,36 @@ async function saveUser() {
   showLoading('Creando usuario…', '');
 
   try {
-    // Load config to get service key
-    const cfg = await loadConfig();
-    if (!cfg.supabaseServiceKey) {
-      hideLoading();
-      toast('Configura SUPABASE_SERVICE_KEY en Vercel', 'error');
-      return;
-    }
-
-    // Use service role client to create user (bypasses auth restrictions)
-    const adminSb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    });
-
-    // Create auth user
     const advisorCode = document.getElementById('uAdvisorCode').value.trim();
 
-    const { data: authData, error: authErr } = await adminSb.auth.admin.createUser({
-      email,
-      password: pwd,
-      email_confirm: true,
-      user_metadata: { name, role, advisor_code: advisorCode }
-    });
-
-    if (authErr) {
+    // Get JWT — service key never leaves the server
+    const sb = await getSupabaseAsync();
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session?.access_token) {
       hideLoading();
-      toast('Error al crear usuario: ' + authErr.message, 'error');
+      toast('Sesión expirada. Vuelve a iniciar sesión.', 'error');
       return;
     }
 
-    // Upsert profile in public.users
-    await adminSb.from('users').upsert({
-      id: authData.user.id,
-      email,
-      name,
-      role,
-      advisor_code: advisorCode || null,
-      active: true
+    const resp = await fetch('/api/create-user', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({ email, password: pwd, name, role, advisor_code: advisorCode })
     });
+
+    const result = await resp.json();
+    if (!resp.ok) {
+      hideLoading();
+      toast('Error: ' + (result.error || resp.status), 'error');
+      return;
+    }
 
     hideLoading();
     closeModal('modalUser');
-    toast('✅ Usuario ' + name + ' creado exitosamente', 'success');
+    toast('✅ Usuario ' + name + ' creado', 'success');
     loadUsers();
 
   } catch(e) {
