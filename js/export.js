@@ -130,8 +130,16 @@ function uploadCatalog(input, onSuccess) {
         toast('El archivo debe tener columnas SKU y Material', 'error');
         return;
       }
-      // Save to localStorage (first 500 rows for prompt, full for reference)
-      localStorage.setItem('ml_catalog', JSON.stringify(rows.slice(0, 500)));
+      // Sort by priority before saving — proteins first, then rest
+      const PRIO_FAM = ['RES','AVES','PESCADOS Y MARISCOS','CERDO','CARNES FRIAS',
+        'CORDERO Y OTROS','QUESOS','CREMAS','MNTQUILLAS Y MARGARI',
+        'PANES Y PASTELES','FRUTAS Y VERDURAS'];
+      const norm = s => (s||'').toString().trim().toUpperCase();
+      const priority = rows.filter(r => PRIO_FAM.includes(norm(r.Familia || r.familia)));
+      const others   = rows.filter(r => !PRIO_FAM.includes(norm(r.Familia || r.familia)));
+      const sorted   = [...priority, ...others];
+      // Save up to 1500 sorted rows (proteins always included)
+      localStorage.setItem('ml_catalog', JSON.stringify(sorted.slice(0, 1500)));
       localStorage.setItem('ml_catalog_total', rows.length);
       localStorage.setItem('ml_catalog_name', file.name);
       localStorage.setItem('ml_catalog_date', new Date().toLocaleDateString('es'));

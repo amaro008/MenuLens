@@ -29,12 +29,44 @@ function dbg(msg, type = 'info') {
 
 // ── CATALOG ───────────────────────────
 let catalogData = [];
+let _catalogLoaded = false;
 
 function loadCatalogFromStorage() {
+  // Fallback: load from localStorage if Supabase not available
   try {
     const saved = localStorage.getItem('ml_catalog');
     if (saved) catalogData = JSON.parse(saved);
   } catch(e) {}
+  return catalogData;
+}
+
+async function loadCatalogFromSupabase() {
+  if (_catalogLoaded && catalogData.length > 0) return catalogData;
+  try {
+    dbg('Cargando catálogo desde Supabase...');
+    const resp = await fetch('/api/catalog');
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.products && data.products.length > 0) {
+        // Normalize field names to match expected format
+        catalogData = data.products.map(p => ({
+          SKU: p.sku, Material: p.material, Marca: p.marca,
+          Familia: (p.familia || '').toUpperCase(),
+          'Sublínea': p.sublinea,
+          'Línea de Ventas': p.linea_ventas,
+          Keywords: p.keywords || ''
+        }));
+        _catalogLoaded = true;
+        dbg(`✅ Catálogo cargado: ${data.priority_count} proteínas + ${data.total - data.priority_count} otros = ${data.total} total`);
+        return catalogData;
+      }
+    }
+  } catch(e) {
+    dbg(`⚠️ Error cargando desde Supabase: ${e.message} — usando localStorage`, 'warn');
+  }
+  // Fallback to localStorage
+  loadCatalogFromStorage();
+  dbg(`📦 Catálogo desde localStorage: ${catalogData.length} productos`);
   return catalogData;
 }
 
