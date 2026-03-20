@@ -1,0 +1,70 @@
+<!--
+  PLANTILLA BASE — copiar en cada página nueva
+  Reemplazar: PAGETITLE, PAGE_ID, y el contenido de #page-content
+
+  Scripts base requeridos (en este orden al final del body):
+  1. supabase CDN
+  2. supabase.js
+  3. auth.js
+  4. ui.js
+  5. (otros js específicos de la página)
+  6. Script inline de inicialización
+-->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>MenuLens — PAGETITLE</title>
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/components.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div id="app">
+  <!-- Loading overlay (siempre presente) -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+    <div class="loading-title" id="loadingTitle">Cargando…</div>
+    <div class="loading-step"  id="loadingStep"></div>
+  </div>
+  <div id="toast"></div>
+
+  <!-- Topbar (llenado por auth.js → renderTopbar) -->
+  <div class="topbar" id="topbar"></div>
+  <div class="topbar-accent"></div>
+
+  <!-- Layout -->
+  <div class="layout">
+    <!-- Sidebar (llenado por auth.js → renderSidebar) -->
+    <div class="sidebar" id="sidebar"></div>
+
+    <!-- Main content -->
+    <div class="main-content">
+      <!-- Tabs opcionales -->
+      <!-- <div class="tabs" id="pageTabs">...</div> -->
+
+      <div class="scrollable">
+        <div class="content" id="page-content">
+          <!-- CONTENIDO DE LA PÁGINA AQUÍ -->
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/supabase.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/ui.js"></script>
+<!-- Scripts específicos de la página -->
+<script>
+(async () => {
+  const user = await requireAuth(); // null redirige a login
+  if (!user) return;
+  renderTopbar(user, ['admin','supervisor'].includes(user.role));
+  renderSidebar(currentPage, user.role);
+  // initPage(user);
+})();
+</script>
+</body>
+</html>

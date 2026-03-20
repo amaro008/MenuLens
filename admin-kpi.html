@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>MenuLens — KPIs Admin</title>
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/components.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div id="app">
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+    <div class="loading-title" id="loadingTitle">Cargando KPIs…</div>
+    <div class="loading-step"  id="loadingStep"></div>
+  </div>
+  <div id="toast"></div>
+  <div class="topbar" id="topbar"></div>
+  <div class="topbar-accent"></div>
+  <div class="layout">
+    <div class="sidebar" id="sidebar"></div>
+    <div class="main-content">
+      <div class="scrollable">
+        <div class="content">
+          <div class="page-header">
+            <div>
+              <div class="page-title">Panel de administración</div>
+              <div class="page-sub">Indicadores de uso de la plataforma</div>
+            </div>
+            <select class="form-input" id="periodSel" style="width:150px" onchange="loadKPIs()">
+              <option value="7">Últimos 7 días</option>
+              <option value="30" selected>Últimos 30 días</option>
+              <option value="90">Últimos 90 días</option>
+            </select>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-card"><div class="stat-num" id="k1">—</div><div class="stat-label">Análisis totales</div></div>
+            <div class="stat-card"><div class="stat-num" id="k2">—</div><div class="stat-label">Asesores activos</div></div>
+            <div class="stat-card"><div class="stat-num" id="k3">—</div><div class="stat-label">Platillos analizados</div></div>
+            <div class="stat-card"><div class="stat-num" id="k4">—</div><div class="stat-label">Precio prom. platillo</div></div>
+          </div>
+          <div class="stats-grid">
+            <div class="stat-card"><div class="stat-num" id="k5">—</div><div class="stat-label">SKUs recomendados</div></div>
+            <div class="stat-card"><div class="stat-num" id="k6">—</div><div class="stat-label">Tiempo prom. análisis</div></div>
+            <div class="stat-card"><div class="stat-num" id="k7">—</div><div class="stat-label">Tasa de completitud</div></div>
+            <div class="stat-card"><div class="stat-num" id="k8">—</div><div class="stat-label">Ingredientes únicos</div></div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div class="card"><div class="card-body">
+              <div class="card-title">👤 Análisis por asesor</div>
+              <div id="kByAdvisor"></div>
+            </div></div>
+            <div class="card"><div class="card-body">
+              <div class="card-title">🍽 Menús por tipo de comida</div>
+              <div id="kByType"></div>
+            </div></div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div class="card"><div class="card-body">
+              <div class="card-title">🏆 Top 10 SKUs recomendados</div>
+              <div id="kTopSku"></div>
+            </div></div>
+            <div class="card"><div class="card-body">
+              <div class="card-title">⭐ Ingredientes por prioridad comercial</div>
+              <div id="kByPrio"></div>
+            </div></div>
+          </div>
+
+          <div class="card"><div class="card-body">
+            <div class="card-title">📅 Actividad diaria (últimos 14 días)</div>
+            <div id="kpiDailyChart" style="display:flex;align-items:flex-end;gap:4px;height:80px;padding-top:8px"></div>
+            <div id="kpiDailyLabels" style="display:flex;gap:4px;margin-top:4px"></div>
+          </div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/supabase.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/ui.js"></script>
+<script>
+(async () => {
+  const user = await requireAuth('admin_or_supervisor');
+  if (!user) return;
+  renderTopbar(user, true);
+  renderSidebar(currentPage, user.role);
+  loadKPIs();
+})();
+
+async function loadKPIs() {
+  const days = parseInt(document.getElementById('periodSel').value);
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+  const sb = getSupabase();
+  if (!sb) { renderDemoKPIs(); return; }
+
+  showLoading('Cargando KPIs…', '');
+  const { data } = await sb.from('analyses')
+    .select('*, users(name), restaurants(food_type,name), ingredients(priority,ingredient_name), sku_matches(sku,material)')
+    .gte('created_at', since);
+  hideLoading();
+  if (!data) return;
+
+  document.getElementById('k1').textContent = data.length;
+  document.getElementById('k2').textContent = new Set(data.map(a => a.user_id)).size;
+  const dishes = data.reduce((s, a) => s + (a.dish_count || 0), 0);
+  document.getElementById('k3').textContent = dishes;
+  const prices = data.filter(a => a.avg_price > 0);
+  const avgP = prices.reduce((s, a) => s + a.avg_price, 0) / (prices.length || 1);
+  document.getElementById('k4').textContent = prices.length ? '$' + Math.round(avgP) : '—';
+  document.getElementById('k5').textContent = data.reduce((s, a) => s + (a.sku_count || 0), 0);
+  const durs = data.filter(a => a.duration_ms > 0);
+  document.getElementById('k6').textContent = durs.length ? Math.round(durs.reduce((s,a)=>s+a.duration_ms,0)/durs.length/1000)+'s' : '—';
+  const complete = data.filter(a => a.status === 'complete').length;
+  document.getElementById('k7').textContent = data.length ? Math.round(complete / data.length * 100) + '%' : '—';
+  const uIngs = new Set(data.flatMap(a => (a.ingredients || []).map(i => i.ingredient_name))).size;
+  document.getElementById('k8').textContent = uIngs;
+
+  const byAdv = {}; data.forEach(a => { const n = a.users?.name||'—'; byAdv[n]=(byAdv[n]||0)+1; });
+  renderBarChart('kByAdvisor', byAdv);
+  const byType = {}; data.forEach(a => { const t = a.restaurants?.food_type||'Otra'; byType[t]=(byType[t]||0)+1; });
+  renderBarChart('kByType', byType);
+  const skuC = {}; data.flatMap(a=>a.sku_matches||[]).forEach(m=>{ const k=m.material||m.sku||'—'; skuC[k]=(skuC[k]||0)+1; });
+  renderBarChart('kTopSku', skuC);
+  const byP = {P1:0,P2:0,P3:0,P4:0,P5:0};
+  data.flatMap(a=>a.ingredients||[]).forEach(i=>{ const p=i.priority||'P5'; byP[p]=(byP[p]||0)+1; });
+  renderBarChart('kByPrio', byP, 5);
+  renderDailyChart(data);
+}
+
+function renderDemoKPIs() {
+  document.getElementById('k1').textContent='24'; document.getElementById('k2').textContent='3';
+  document.getElementById('k3').textContent='287'; document.getElementById('k4').textContent='$162';
+  document.getElementById('k5').textContent='312'; document.getElementById('k6').textContent='18s';
+  document.getElementById('k7').textContent='92%'; document.getElementById('k8').textContent='64';
+  renderBarChart('kByAdvisor', {'Carlos Vega':12,'María Rodríguez':8,'Jorge Pérez':4});
+  renderBarChart('kByType', {'Mexicana':9,'Italiana':6,'Americana':4,'Fast Food':3,'Asiática':2});
+  renderBarChart('kTopSku', {'Pollo entero':18,'Queso Oaxaca':14,'Crema de leche':11,'Aceite girasol':9,'Carne molida':8,'Tortillas':7,'Pechuga':6,'Parmesano':5,'Mantequilla':4,'Pimienta':4});
+  renderBarChart('kByPrio', {'P1':38,'P2':74,'P3':52,'P4':41,'P5':102}, 5);
+  renderDailyChart([]);
+}
+</script>
+</body>
+</html>

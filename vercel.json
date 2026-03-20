@@ -1,19 +1,14 @@
 {
   "rewrites": [
-    { "source": "/", "destination": "/src/pages/login.html" },
-    { "source": "/login", "destination": "/src/pages/login.html" },
-    { "source": "/login.html", "destination": "/src/pages/login.html" },
-    { "source": "/dashboard", "destination": "/src/pages/dashboard.html" },
-    { "source": "/dashboard.html", "destination": "/src/pages/dashboard.html" },
-    { "source": "/analyzer", "destination": "/src/pages/analyzer.html" },
-    { "source": "/analyzer.html", "destination": "/src/pages/analyzer.html" },
-    { "source": "/results", "destination": "/src/pages/results.html" },
-    { "source": "/results.html", "destination": "/src/pages/results.html" },
-    { "source": "/history", "destination": "/src/pages/history.html" },
-    { "source": "/history.html", "destination": "/src/pages/history.html" },
-    { "source": "/admin-kpi.html", "destination": "/src/pages/admin-kpi.html" },
-    { "source": "/admin-users.html", "destination": "/src/pages/admin-users.html" },
-    { "source": "/admin-config.html", "destination": "/src/pages/admin-config.html" },
-    { "source": "/admin", "destination": "/src/pages/admin-kpi.html" }
+    { "source": "/", "destination": "/login.html" },
+    { "source": "/login", "destination": "/login.html" },
+    { "source": "/dashboard", "destination": "/dashboard.html" },
+    { "source": "/analyzer", "destination": "/analyzer.html" },
+    { "source": "/results", "destination": "/results.html" },
+    { "source": "/history", "destination": "/history.html" },
+    { "source": "/admin", "destination": "/admin-kpi.html" },
+    { "source": "/admin/kpi", "destination": "/admin-kpi.html" },
+    { "source": "/admin/users", "destination": "/admin-users.html" },
+    { "source": "/admin/config", "destination": "/admin-config.html" }
   ]
 }

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#C8102E">
+<title>MenuLens — Iniciar sesión</title>
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/components.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  html,body{overflow:auto;touch-action:auto}
+  #app{position:static;overflow:visible}
+  .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--gray-l);padding:20px}
+  .login-card{background:white;border-radius:14px;border:1px solid var(--border);width:100%;max-width:360px;overflow:hidden;box-shadow:var(--shadow-m)}
+  .login-top{background:var(--red);padding:28px 24px;text-align:center}
+  .login-logo{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:6px}
+  .login-logo-icon{background:white;border-radius:8px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:var(--red);overflow:hidden}
+  .login-logo-icon img{width:100%;height:100%;object-fit:contain}
+  .login-logo-text{color:white;font-size:24px;font-weight:700}
+  .login-logo-text span{color:var(--yellow)}
+  .login-sub{color:rgba(255,255,255,.8);font-size:12px;margin-top:4px}
+  .login-body{padding:24px}
+  .login-company{text-align:center;margin-top:16px;padding-top:14px;border-top:1px solid var(--border);font-size:12px;color:var(--text-l)}
+  .login-company-name{color:var(--text-m);font-size:13px;font-weight:600;display:block;margin-top:2px}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="toast"></div>
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+    <div class="loading-title" id="loadingTitle">Iniciando sesión…</div>
+    <div class="loading-step" id="loadingStep"></div>
+  </div>
+
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-top">
+        <div class="login-logo">
+          <div class="login-logo-icon" id="appLogoLogin">M</div>
+          <div class="login-logo-text">Menu<span>Lens</span></div>
+        </div>
+        <div class="login-sub">Plataforma de análisis de menús</div>
+      </div>
+      <div class="login-body">
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="form-group">
+            <label class="form-label">Correo electrónico</label>
+            <input class="form-input" type="email" id="loginEmail" placeholder="tu@empresa.com" autocomplete="email">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Contraseña</label>
+            <input class="form-input" type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
+          </div>
+          <button class="btn btn-primary btn-block" style="padding:11px;font-size:14px;margin-top:4px" onclick="doLogin()">
+            Iniciar sesión
+          </button>
+          <div style="text-align:center;font-size:12px;color:var(--text-m)">
+            <span style="color:var(--red);cursor:pointer" onclick="showForgot()">¿Olvidaste tu contraseña?</span>
+          </div>
+        </div>
+        <div class="login-company">
+          Powered by
+          <span class="login-company-name" id="companyNameDisplay"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/supabase.js"></script>
+<script src="js/ui.js"></script>
+<script>
+  // Show branding
+  const cn = Config.companyName();
+  document.getElementById('companyNameDisplay').textContent = cn;
+  document.title = 'MenuLens — ' + cn;
+  const appLogo = Config.get('app_logo_b64');
+  if (appLogo) {
+    const el = document.getElementById('appLogoLogin');
+    el.innerHTML = `<img src="${appLogo}" alt="Logo">`;
+  }
+
+  // Enter key
+  document.getElementById('loginPassword').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+  });
+
+  async function doLogin() {
+    const email = document.getElementById('loginEmail').value.trim();
+    const pwd   = document.getElementById('loginPassword').value;
+    if (!email || !pwd) { toast('Ingresa tu correo y contraseña', 'error'); return; }
+
+    showLoading('Iniciando sesión…', '');
+    const sb = getSupabase();
+
+    if (!sb) {
+      // DEMO MODE
+      if (email === 'admin@demo.com' && pwd === 'admin123') {
+        const user = { id: '1', email, name: 'Administrador', role: 'admin' };
+        sessionStorage.setItem('ml_demo_user', JSON.stringify(user));
+        hideLoading();
+        window.location.href = 'admin-kpi.html';
+      } else if (pwd.length >= 6) {
+        const user = { id: '2', email, name: email.split('@')[0], role: 'advisor' };
+        sessionStorage.setItem('ml_demo_user', JSON.stringify(user));
+        hideLoading();
+        window.location.href = 'dashboard.html';
+      } else {
+        hideLoading();
+        toast('Contraseña incorrecta (demo: mínimo 6 caracteres)', 'error');
+      }
+      return;
+    }
+
+    // SUPABASE MODE
+    const { data, error } = await sb.auth.signInWithPassword({ email, password: pwd });
+    if (error) {
+      hideLoading();
+      toast('Credenciales incorrectas', 'error');
+      return;
+    }
+    const { data: profile } = await sb.from('users').select('role').eq('id', data.user.id).single();
+    hideLoading();
+    const role = profile?.role || 'advisor';
+    window.location.href = ['admin', 'supervisor'].includes(role) ? 'admin-kpi.html' : 'dashboard.html';
+  }
+
+  function showForgot() {
+    toast('Contacta al administrador para restablecer tu contraseña', '');
+  }
+
+  // Redirect if already logged in
+  (async () => {
+    const sb = getSupabase();
+    if (sb) {
+      const { data: { session } } = await sb.auth.getSession();
+      if (session) {
+        const { data: p } = await sb.from('users').select('role').eq('id', session.user.id).single();
+        window.location.href = ['admin','supervisor'].includes(p?.role) ? 'admin-kpi.html' : 'dashboard.html';
+      }
+    } else if (sessionStorage.getItem('ml_demo_user')) {
+      const u = JSON.parse(sessionStorage.getItem('ml_demo_user'));
+      window.location.href = ['admin','supervisor'].includes(u.role) ? 'admin-kpi.html' : 'dashboard.html';
+    }
+  })();
+</script>
+</body>
+</html>

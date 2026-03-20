@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>MenuLens — Configuración</title>
+<link rel="stylesheet" href="css/main.css">
+<link rel="stylesheet" href="css/components.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+<div id="app">
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+    <div class="loading-title" id="loadingTitle">Guardando…</div>
+    <div class="loading-step"  id="loadingStep"></div>
+  </div>
+  <div id="toast"></div>
+  <div class="topbar" id="topbar"></div>
+  <div class="topbar-accent"></div>
+  <div class="layout">
+    <div class="sidebar" id="sidebar"></div>
+    <div class="main-content">
+      <div class="scrollable">
+        <div class="content">
+          <div class="page-title">Configuración</div>
+
+          <!-- BRANDING -->
+          <div class="card">
+            <div class="card-body">
+              <div class="card-title">🎨 Identidad visual</div>
+              <div class="logo-slots" style="margin-bottom:14px">
+                <div class="logo-slot">
+                  <div class="logo-slot-label">Logo de la empresa</div>
+                  <div class="logo-placeholder" id="companyLogoPreview">LOGO</div>
+                  <input type="file" id="companyLogoInput" accept="image/*" style="display:none"
+                    onchange="previewLogo(this,'companyLogoPreview','company_logo_b64');updateTopbarLogo()">
+                  <button class="btn btn-outline btn-sm btn-block" style="margin-top:6px"
+                    onclick="document.getElementById('companyLogoInput').click()">Subir imagen</button>
+                </div>
+                <div class="logo-slot">
+                  <div class="logo-slot-label">Logo de MenuLens</div>
+                  <div class="logo-placeholder" id="appLogoPreview" style="background:var(--red-l);border-color:var(--red-m);color:var(--red);font-weight:800">M</div>
+                  <input type="file" id="appLogoInput" accept="image/*" style="display:none"
+                    onchange="previewLogo(this,'appLogoPreview','app_logo_b64');updateTopbarLogo()">
+                  <button class="btn btn-outline btn-sm btn-block" style="margin-top:6px"
+                    onclick="document.getElementById('appLogoInput').click()">Subir imagen</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Nombre de la empresa</label>
+                <input class="form-input" id="cfgCompanyName" placeholder="Ej: Sigma Foods">
+              </div>
+              <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="saveBranding()">Guardar identidad</button>
+            </div>
+          </div>
+
+          <!-- API KEYS -->
+          <div class="card">
+            <div class="card-body">
+              <div class="card-title">🔑 API Keys</div>
+              <div style="display:flex;flex-direction:column;gap:12px">
+                <div class="form-group">
+                  <label class="form-label">Anthropic API Key (Claude)</label>
+                  <div style="display:flex;gap:8px">
+                    <input class="form-input" type="password" id="cfgAnthropicKey" placeholder="sk-ant-…" style="flex:1">
+                    <button class="btn btn-outline btn-sm" onclick="testAnthropic()">Verificar</button>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Supabase URL</label>
+                  <input class="form-input" id="cfgSupabaseUrl" placeholder="https://xxxx.supabase.co">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Supabase Anon Key</label>
+                  <input class="form-input" type="password" id="cfgSupabaseKey" placeholder="eyJ…">
+                </div>
+                <button class="btn btn-primary btn-sm" onclick="saveKeys()">Guardar keys</button>
+                <div style="font-size:11px;color:var(--text-l)">Las keys se guardan en el navegador (localStorage). Para mayor seguridad en producción, usa variables de entorno en un backend.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- CATALOG -->
+          <div class="card">
+            <div class="card-body">
+              <div class="card-title">📦 Catálogo de SKUs</div>
+              <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+                <div>
+                  <div style="font-size:13px;font-weight:600" id="catalogFile">Sin catálogo cargado</div>
+                  <div style="font-size:11px;color:var(--text-m)" id="catalogMeta"></div>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <label class="btn btn-primary btn-sm" style="cursor:pointer">
+                  ↑ Cargar Excel / CSV
+                  <input type="file" id="catalogInput" accept=".xlsx,.xls,.csv" style="display:none"
+                    onchange="handleCatalog(this)">
+                </label>
+                <button class="btn btn-outline btn-sm" onclick="downloadCatalogTemplate()">↓ Descargar plantilla</button>
+              </div>
+              <div style="margin-top:10px;font-size:11px;color:var(--text-l)">
+                Columnas requeridas: <strong>SKU</strong> y <strong>Material</strong>.<br>
+                Opcionales: Familia, Sublínea, Línea de Ventas, Marca.
+              </div>
+            </div>
+          </div>
+
+          <!-- PARAMS -->
+          <div class="card">
+            <div class="card-body">
+              <div class="card-title">⚙️ Parámetros del análisis</div>
+              <div class="permission-row">
+                <div><div class="perm-label">Inferir ingredientes implícitos (burger, hot dog, alitas…)</div></div>
+                <button class="toggle on" id="tImplicit" onclick="this.classList.toggle('on')"></button>
+              </div>
+              <div class="permission-row">
+                <div><div class="perm-label">Detectar alérgenos automáticamente</div></div>
+                <button class="toggle" id="tAllergens" onclick="this.classList.toggle('on')"></button>
+              </div>
+              <div class="permission-row">
+                <div><div class="perm-label">Mostrar score de confianza en resultados</div></div>
+                <button class="toggle on" id="tConfidence" onclick="this.classList.toggle('on')"></button>
+              </div>
+              <div class="permission-row">
+                <div><div class="perm-label">Guardar historial automáticamente</div></div>
+                <button class="toggle on" id="tHistory" onclick="this.classList.toggle('on')"></button>
+              </div>
+              <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="saveParams()">Guardar parámetros</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/supabase.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/export.js"></script>
+<script>
+(async () => {
+  const user = await requireAuth('admin_or_supervisor');
+  if (!user) return;
+  renderTopbar(user, true);
+  renderSidebar(currentPage, user.role);
+  loadCurrentValues();
+})();
+
+function loadCurrentValues() {
+  document.getElementById('cfgCompanyName').value = Config.companyName();
+  document.getElementById('cfgAnthropicKey').value = Config.get('anthropic_key') ? '••••••••••••••••' : '';
+  document.getElementById('cfgSupabaseUrl').value = Config.get('supabase_url');
+  document.getElementById('cfgSupabaseKey').value = Config.get('supabase_key') ? '••••••••••••••••' : '';
+
+  // Logos
+  const cLogo = Config.get('company_logo_b64');
+  if (cLogo) document.getElementById('companyLogoPreview').innerHTML = `<img src="${cLogo}" style="width:100%;height:100%;object-fit:contain">`;
+  const aLogo = Config.get('app_logo_b64');
+  if (aLogo) document.getElementById('appLogoPreview').innerHTML = `<img src="${aLogo}" style="width:100%;height:100%;object-fit:contain">`;
+
+  // Catalog
+  const catName = localStorage.getItem('ml_catalog_name');
+  const catTotal = localStorage.getItem('ml_catalog_total');
+  const catDate = localStorage.getItem('ml_catalog_date');
+  if (catName) {
+    document.getElementById('catalogFile').textContent = catName;
+    document.getElementById('catalogMeta').textContent = (catTotal || '?') + ' productos · ' + (catDate || '');
+  }
+}
+
+function saveBranding() {
+  const name = document.getElementById('cfgCompanyName').value.trim();
+  if (name) Config.set('company_name', name);
+  toast('✅ Identidad guardada', 'success');
+}
+
+function saveKeys() {
+  const ak = document.getElementById('cfgAnthropicKey').value.trim();
+  const su = document.getElementById('cfgSupabaseUrl').value.trim();
+  const sk = document.getElementById('cfgSupabaseKey').value.trim();
+  if (ak && !ak.includes('•')) Config.set('anthropic_key', ak);
+  if (su) Config.set('supabase_url', su);
+  if (sk && !sk.includes('•')) Config.set('supabase_key', sk);
+  reinitSupabase();
+  toast('✅ Keys guardadas — recarga la página para aplicar Supabase', 'success');
+}
+
+async function testAnthropic() {
+  const key = document.getElementById('cfgAnthropicKey').value.trim();
+  const realKey = key.includes('•') ? Config.get('anthropic_key') : key;
+  if (!realKey) { toast('Ingresa una API Key primero', 'error'); return; }
+  showLoading('Verificando API Key…', '');
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': realKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 10, messages: [{ role: 'user', content: 'ping' }] })
+    });
+    hideLoading();
+    if (r.ok) toast('✅ API Key válida y funcional', 'success');
+    else { const e = await r.json(); toast('❌ ' + (e.error?.message || 'Key inválida'), 'error'); }
+  } catch(e) { hideLoading(); toast('Error de conexión: ' + e.message, 'error'); }
+}
+
+function handleCatalog(input) {
+  uploadCatalog(input, (rows, name) => {
+    document.getElementById('catalogFile').textContent = name;
+    document.getElementById('catalogMeta').textContent = rows.length + ' productos · ' + new Date().toLocaleDateString('es');
+  });
+}
+
+function saveParams() { toast('✅ Parámetros guardados', 'success'); }
+
+function updateTopbarLogo() {
+  // Re-render topbar with new logo
+  const tb = document.getElementById('topbar');
+  if (tb && typeof renderTopbar === 'function') {
+    getCurrentUser().then(u => { if (u) renderTopbar(u, true); });
+  }
+}
+</script>
+</body>
+</html>
