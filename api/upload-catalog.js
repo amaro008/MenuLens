@@ -1,4 +1,4 @@
-// api/upload-catalog.js — sube catálogo a Supabase via REST API (sin npm imports)
+// api/upload-catalog.js — sube catálogo a Supabase via REST API
 export const config = {
   api: { bodyParser: { sizeLimit: '15mb' } }
 };
@@ -30,22 +30,22 @@ export default async function handler(req, res) {
   const base = `${supabaseUrl}/rest/v1`;
 
   try {
-    // Step 1: Delete existing catalog for this company
-    const delResp = await fetch(`${base}/sku_catalog?company=eq.${encodeURIComponent(company)}`, {
-      method: 'DELETE',
-      headers
-    });
-    if (!delResp.ok && delResp.status !== 404) {
-      const errText = await delResp.text();
-      console.warn('Delete warning:', errText);
-    }
+    // Step 1: Delete ALL existing records for this company
+    // Use neq filter trick to delete all rows matching company
+    const delResp = await fetch(
+      `${base}/sku_catalog?company=eq.${encodeURIComponent(company)}&sku=neq.___NONE___`,
+      { method: 'DELETE', headers }
+    );
+    console.log('Delete status:', delResp.status);
 
-    // Step 2: Insert in batches of 500
-    const BATCH = 500;
+    // Wait a moment for delete to complete
+    await new Promise(r => setTimeout(r, 500));
+
+    // Step 2: Insert in batches of 300 (smaller to avoid timeouts)
+    const BATCH = 300;
     let inserted = 0;
-
-    for (let i = 0; i < products.length; i += BATCH) {
-      const batch = products.slice(i, i + BATCH).map(p => ({
+    const rows = products
+      .map(p => ({
         company,
         familia:      (p.Familia      || p.familia      || '').toString().trim().toUpperCase(),
         sublinea:     (p['Sublínea']  || p.sublinea     || '').toString().trim(),
@@ -55,27 +55,31 @@ export default async function handler(req, res) {
         material:     (p.Material     || p.material     || '').toString().trim(),
         keywords:     (p.Keywords     || p.keywords     || '').toString().trim(),
         active:       true
-      })).filter(p => p.sku && p.material);
+      }))
+      .filter(p => p.sku && p.material);
+
+    for (let i = 0; i < rows.length; i += BATCH) {
+      const batch = rows.slice(i, i + BATCH);
 
       const insertResp = await fetch(`${base}/sku_catalog`, {
         method: 'POST',
-        headers: { ...headers, 'Prefer': 'return=minimal' },
+        headers: { ...headers, 'Prefer': 'return=minimal,resolution=ignore-duplicates' },
         body: JSON.stringify(batch)
       });
 
       if (!insertResp.ok) {
         const errText = await insertResp.text();
-        throw new Error(`Batch ${Math.floor(i/BATCH)+1} failed: ${errText.substring(0, 200)}`);
+        throw new Error(`Batch ${Math.floor(i/BATCH)+1}: ${errText.substring(0, 300)}`);
       }
 
       inserted += batch.length;
-      console.log(`Inserted batch ${Math.floor(i/BATCH)+1}: ${inserted}/${products.length}`);
+      console.log(`Batch ${Math.floor(i/BATCH)+1} OK: ${inserted}/${rows.length}`);
     }
 
     return res.status(200).json({ success: true, inserted, total: products.length });
 
   } catch(e) {
-    console.error('Upload catalog error:', e.message);
+    console.error('Upload error:', e.message);
     return res.status(500).json({ error: e.message });
   }
 }
