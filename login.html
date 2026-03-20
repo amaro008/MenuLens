@@ -93,9 +93,12 @@
     if (!email || !pwd) { toast('Ingresa tu correo y contraseña', 'error'); return; }
 
     showLoading('Iniciando sesión…', '');
-    const sb = getSupabase();
 
-    if (!sb) {
+    // Build supabase client fresh from localStorage every time
+    const sbUrl = localStorage.getItem('ml_supabase_url') || '';
+    const sbKey = localStorage.getItem('ml_supabase_key') || '';
+
+    if (!sbUrl || !sbKey) {
       // DEMO MODE
       if (email === 'admin@demo.com' && pwd === 'admin123') {
         const user = { id: '1', email, name: 'Administrador', role: 'admin' };
@@ -114,30 +117,38 @@
       return;
     }
 
-    // SUPABASE MODE
+    // SUPABASE MODE — create fresh client
+    const sb = window.supabase.createClient(sbUrl, sbKey);
+
     const { data, error } = await sb.auth.signInWithPassword({ email, password: pwd });
     if (error) {
       hideLoading();
-      toast('Credenciales incorrectas', 'error');
+      toast('Credenciales incorrectas: ' + error.message, 'error');
       return;
     }
-    console.log('AUTH OK uid:', data.user.id);
-    let profile = null;
-    for (let i = 0; i < 3; i++) {
-      const { data: p, error: perr } = await sb.from('users').select('role').eq('id', data.user.id).single();
-      console.log('Attempt', i+1, 'profile:', p, 'err:', perr?.message);
-      if (p) { profile = p; break; }
-      await new Promise(r => setTimeout(r, 800));
-    }
-    console.log('Final profile:', profile);
-    if (!profile) {
-      const ins = await sb.from('users').insert({ id: data.user.id, email: data.user.email, name: data.user.email.split('@')[0], role: 'advisor' });
-      console.log('Insert result:', ins);
-      profile = { role: 'advisor' };
-    }
+
+    // Read role directly with fresh client
+    const { data: profile, error: profileErr } = await sb
+      .from('users')
+      .select('role, name')
+      .eq('id', data.user.id)
+      .single();
+
     hideLoading();
+
+    if (profileErr || !profile) {
+      // Profile missing — create it as advisor and try admin update
+      await sb.from('users').upsert({
+        id: data.user.id,
+        email: data.user.email,
+        name: data.user.email.split('@')[0],
+        role: 'advisor'
+      });
+      window.location.href = 'dashboard.html';
+      return;
+    }
+
     const role = profile.role || 'advisor';
-    console.log('Role:', role, '-> redirecting');
     window.location.href = ['admin', 'supervisor'].includes(role) ? 'admin-kpi.html' : 'dashboard.html';
   }
 

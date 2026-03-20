@@ -7,8 +7,8 @@
     { "source": "/results", "destination": "/results.html" },
     { "source": "/history", "destination": "/history.html" },
     { "source": "/admin", "destination": "/admin-kpi.html" },
-    { "source": "/admin/kpi", "destination": "/admin-kpi.html" },
-    { "source": "/admin/users", "destination": "/admin-users.html" },
-    { "source": "/admin/config", "destination": "/admin-config.html" }
+    { "source": "/admin-kpi", "destination": "/admin-kpi.html" },
+    { "source": "/admin-users", "destination": "/admin-users.html" },
+    { "source": "/admin-config", "destination": "/admin-config.html" }
   ]
 }
