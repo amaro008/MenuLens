@@ -160,21 +160,23 @@ function setActiveFile(idx) {
 function renderFileList() {
   const el = document.getElementById('fileList');
   if (!el || !_files.length) return;
-  el.innerHTML = _files.map((f, i) => {
-    const active = i === _currentFileIdx;
-    return '<div style="display:flex;align-items:center;gap:8px;background:var(--gray-l);' +
-      'border-radius:var(--r-s);padding:8px 10px;border:1px solid ' +
-      (active ? 'var(--red)' : 'transparent') + '">' +
-      '<span style="font-size:16px">' + (f.type === 'application/pdf' ? '📄' : '🖼') + '</span>' +
+  // Show all files as pages — no "active" concept, all sent together
+  const total = _files.length;
+  el.innerHTML = '<div style="font-size:11px;color:var(--text-m);margin-bottom:6px">' +
+    total + (total === 1 ? ' página cargada' : ' páginas cargadas — se analizarán juntas') +
+    '</div>' +
+    _files.map((f, i) =>
+      '<div style="display:flex;align-items:center;gap:8px;background:var(--gray-l);' +
+      'border-radius:var(--r-s);padding:7px 10px;margin-bottom:4px">' +
+      '<span style="font-size:13px;color:var(--text-m);min-width:16px;text-align:center">' + (i+1) + '</span>' +
+      '<span style="font-size:14px">' + (f.type === 'application/pdf' ? '📄' : '🖼') + '</span>' +
       '<div style="flex:1;min-width:0">' +
-        '<div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + f.name + '</div>' +
-        '<div style="font-size:10px;color:var(--text-m)">' + Math.round(f.size/1024) + ' KB' +
-          (active ? ' · <span style="color:var(--red)">Activo</span>' : '') + '</div>' +
+        '<div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + f.name + '</div>' +
+        '<div style="font-size:10px;color:var(--text-m)">' + Math.round(f.size/1024) + ' KB</div>' +
       '</div>' +
-      (!active ? '<button onclick="setActiveFile(' + i + ')" style="font-size:11px;color:var(--text-m);background:none;border:0.5px solid var(--border);border-radius:4px;padding:2px 6px;cursor:pointer">Usar</button>' : '') +
       '<button onclick="removeFile(' + i + ')" style="font-size:16px;color:var(--text-m);background:none;border:none;cursor:pointer;line-height:1">✕</button>' +
-      '</div>';
-  }).join('');
+      '</div>'
+    ).join('');
 }
 
 function removeFile(idx) {
@@ -221,7 +223,7 @@ function removeFile(idx) {
 function checkBtn() {
   const name   = (document.getElementById('bizName')?.value || '').trim();
   const client = (document.getElementById('bizClientNum')?.value || '').trim();
-  document.getElementById('analyzeBtn').disabled = !_fileBase64 || !name || !client;
+  document.getElementById('analyzeBtn').disabled = !_files.length || !name || !client;
 }
 
 // ── ANALYSIS ──────────────────────────
@@ -254,7 +256,7 @@ async function startAnalysis() {
   showLoading('Analizando menú con IA…', `${modelLabel} está leyendo el menú…`);
 
   try {
-    const result = await callClaudeAnalysis(_fileBase64, _fileType, bizName, bizCity);
+    const result = await callClaudeAnalysis(_files, bizName, bizCity);
 
     const fullData = {
       ...result,
