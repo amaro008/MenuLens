@@ -447,11 +447,17 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
   } catch(e) { /* continue without auth in demo mode */ }
 
   // Llamar a /api/analyze (proxy serverless en Vercel — evita CORS)
+  // Use model from config (set in Admin → Configuración → Modelo de IA)
+  const activeModel = window._mlConfig?.activeModel
+    || localStorage.getItem('ml_active_model')
+    || window._mlConfig?.activeModel || localStorage.getItem('ml_active_model') || 'claude-sonnet-4-6';
+  dbg(`Modelo activo: ${activeModel}`);
+
   const resp = await fetch('/api/analyze', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeader },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: activeModel,
       max_tokens: 16000,
       system: finalPrompt,
       messages: [{ role: 'user', content: userContent }]

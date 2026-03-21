@@ -63,9 +63,10 @@ async function loadConfig() {
 
 function _applyConfig(data) {
   window._mlConfig = data;
-  if (data.supabaseUrl) localStorage.setItem('ml_supabase_url', data.supabaseUrl);
-  if (data.supabaseKey) localStorage.setItem('ml_supabase_key', data.supabaseKey);
-  if (data.companyName) localStorage.setItem('ml_company_name', data.companyName);
+  if (data.supabaseUrl)  localStorage.setItem('ml_supabase_url',    data.supabaseUrl);
+  if (data.supabaseKey)  localStorage.setItem('ml_supabase_key',    data.supabaseKey);
+  if (data.companyName)  localStorage.setItem('ml_company_name',    data.companyName);
+  if (data.activeModel)  localStorage.setItem('ml_active_model',    data.activeModel);
   // anthropicKey NOT cached in localStorage — stays server-side only
   _initSupabaseClient(data);
 }
