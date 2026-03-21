@@ -310,9 +310,21 @@ Dentro de la familia, elegir el producto más lógico según nombre y precio del
 PASO 3 — REPORTAR:
 - Match por Sublínea → Confianza Alta
 - Match por Material → Confianza Media
-- Producto genérico → reportar MEJOR opción + 2-3 alternativas
 - GAP solo si genuinamente no hay nada en el catálogo
 - NUNCA gap para: arrachera, t-bone, cowboy, short rib, ribeye, camarón, pulpo, langosta, alitas, chorizo
+
+ALTERNATIVAS — OBLIGATORIO SIEMPRE:
+- TODOS los ingredientes deben tener al menos 2 alternativas en el array alternatives
+- Alternativas = otros SKUs de la MISMA sublínea o familia que podrían sustituir al principal
+- Ejemplo ribeye: alternatives = [{sku:"70011253", material:"RIBEYE LIPON DE RES 16 OZ CAB"}, {sku:"70011279", material:"RIBEYE LIPON DE RES 8 OZ CAB"}]
+- Ejemplo camarón: alternatives = [{sku:"70070094", material:"CAMARON COLOSAL U12"}, {sku:"70070123", material:"CAMARON 16-20 SIN CABEZA"}]
+- Si solo hay 1 SKU en la sublínea, busca en sublíneas similares de la misma familia
+- NUNCA dejar alternatives: [] vacío si hay más de 1 producto en el catálogo para esa familia
+
+ORDEN DEL ARRAY matching_table — OBLIGATORIO:
+- Ordenar TODO el array matching_table de mayor a menor prioridad comercial
+- Primero todos los P1 (por menciones desc), luego P2, P3, P4, P5
+- Un P1 con 1 mención SIEMPRE va antes que un P5 con 10 menciones
 
 REGLA TOP 10 — ORDEN OBLIGATORIO:
 1. Agrupa todos los matches por prioridad
@@ -416,11 +428,14 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
     }
   } catch(e) {}
 
+  const activeModel = localStorage.getItem('ml_active_model') || 'claude-sonnet-4-6';
+  dbg(`Modelo activo: ${activeModel}`);
+
   const resp = await fetch('/api/analyze', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeader },
     body: JSON.stringify({
-      model: localStorage.getItem('ml_active_model') || 'claude-sonnet-4-6',
+      model: activeModel,
       max_tokens: 64000,
       system: finalPrompt,
       messages: [{ role: 'user', content: userContent }]
