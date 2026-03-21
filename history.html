@@ -51,10 +51,10 @@
             <div class="table-wrap">
               <table>
                 <thead>
-                  <tr><th>Cliente #</th><th>Nombre comercial</th><th>Tipo</th><th>Ciudad</th><th>Fecha</th><th>Platillos</th><th>SKUs</th><th>Estado</th><th></th></tr>
+                  <tr><th>Cliente #</th><th>Nombre comercial</th><th>Tipo</th><th>Precio prom.</th><th>Modelo</th><th>Fecha</th><th>Platillos</th><th>SKUs</th><th>Estado</th><th></th></tr>
                 </thead>
                 <tbody id="histBody">
-                  <tr><td colspan="8" style="text-align:center;color:var(--text-l);padding:32px">Sin análisis aún</td></tr>
+                  <tr><td colspan="10" style="text-align:center;color:var(--text-l);padding:32px">Sin análisis aún</td></tr>
                 </tbody>
               </table>
             </div>
@@ -92,7 +92,7 @@ async function loadHistory(user) {
 
   showLoading('Cargando historial…', '');
   const { data } = await sb.from('analyses')
-    .select('id, created_at, status, dish_count, sku_count, client_number, restaurants(name, city, zone, food_type)')
+    .select('id, created_at, status, dish_count, sku_count, client_number, avg_price_platillos, price_tier, model_used, restaurants(name, food_type)')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false });
   hideLoading();
@@ -106,7 +106,8 @@ function renderTable(data) {
       <td><span class="badge badge-blue" style="font-size:10px">${a.client_number || '—'}</span></td>
       <td><div class="td-main">${a.restaurants?.name || '—'}</div></td>
       <td><span class="badge badge-yellow">${a.restaurants?.food_type || '—'}</span></td>
-      <td>${[a.restaurants?.zone, a.restaurants?.city].filter(Boolean).join(', ') || '—'}</td>
+      <td style="font-size:12px">${a.avg_price_platillos ? '$'+Math.round(a.avg_price_platillos) : '—'}${a.price_tier ? ' <span style="font-size:9px;color:var(--text-m)">'+({premium:'●',medio:'●',economico:'●'}[a.price_tier]||'')+'</span>' : ''}</td>
+      <td style="font-size:11px">${a.model_used ? (a.model_used.startsWith('gemini')?'<span style="color:#1E40AF">✦ Gemini</span>':a.model_used.includes('haiku')?'◆ Haiku':'◆ Sonnet') : '—'}</td>
       <td>${formatDate(a.created_at)}</td>
       <td>${a.dish_count || '—'}</td>
       <td>${a.sku_count || '—'}</td>
@@ -117,7 +118,7 @@ function renderTable(data) {
       </td>
     </tr>`).join('');
   document.getElementById('histBody').innerHTML = rows ||
-    `<tr><td colspan="8" style="text-align:center;color:var(--text-l);padding:32px">Sin resultados</td></tr>`;
+    `<tr><td colspan="10" style="text-align:center;color:var(--text-l);padding:32px">Sin resultados</td></tr>`;
 }
 
 // ── DELETE ANALYSIS ───────────────────
