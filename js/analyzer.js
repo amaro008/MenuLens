@@ -44,7 +44,16 @@ async function loadCatalogFromSupabase() {
   if (_catalogLoaded && catalogData.length > 0) return catalogData;
   try {
     dbg('Cargando catálogo desde Supabase...');
-    const resp = await fetch('/api/catalog');
+    // Send JWT so server can filter catalog by user's office
+    let catHeaders = {};
+    try {
+      const sb = window._mlSupabase;
+      if (sb) {
+        const { data: { session } } = await sb.auth.getSession();
+        if (session?.access_token) catHeaders = { 'Authorization': `Bearer ${session.access_token}` };
+      }
+    } catch(e) {}
+    const resp = await fetch('/api/catalog', { headers: catHeaders });
     if (resp.ok) {
       const data = await resp.json();
       if (data.products && data.products.length > 0) {
