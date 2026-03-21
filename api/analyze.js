@@ -2,7 +2,7 @@
 // Streaming evita el timeout de Vercel Hobby (10s)
 export const config = {
   api: {
-    bodyParser: { sizeLimit: '20mb' },
+    bodyParser: { sizeLimit: '50mb' },
     responseLimit: false
   }
 };
