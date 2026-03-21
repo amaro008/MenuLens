@@ -267,8 +267,8 @@ P5: Resto (salsas, condimentos, mieles, bebidas, aceites, etc.)
 
 
 TIPOS DE COMIDA — elige el más cercano:
-Mexicana, Italiana, Americana, Mariscos, Asiática, Mediterránea,
-Panadería/Café, Fast Food, Saludable/Vegana, Internacional, Fusión, Otra
+Mexicana, Italiana, Americana, Steakhouse, Marisquería, Pizzería,
+Asiática, Mediterránea, Panadería/Café, Saludable/Vegana, Internacional, Fusión, Otra
 
 ANÁLISIS DE PRECIOS (OBLIGATORIO):
 - Clasificar cada platillo en: entrada, platillo, postre, bebida, otro
