@@ -132,142 +132,28 @@
           <!-- MODEL SELECTOR -->
           <div class="card">
             <div class="card-body">
-              <div class="card-title">🤖 Modelo de IA</div>
-              <p style="font-size:12px;color:var(--text-m);margin-bottom:14px;line-height:1.6">
-                Selecciona el modelo que usará MenuLens para analizar menús. Configura las API keys correspondientes en Vercel.
-              </p>
-              <div style="display:flex;flex-direction:column;gap:10px" id="modelCards">
-
-                <!-- Gemini 2.5 Flash -->
-                <label style="display:flex;align-items:flex-start;gap:12px;padding:14px;border:1px solid var(--border);border-radius:var(--r);cursor:pointer;transition:border .15s" id="card-gemini25">
-                  <input type="radio" name="activeModel" value="gemini-2.5-flash" style="margin-top:3px;accent-color:var(--red)">
-                  <div style="flex:1">
-                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                      <span style="font-size:13px;font-weight:600">Gemini 2.5 Flash</span>
-                      <span style="background:#E8F5E9;color:#2E7D32;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:600">MÁS ECONÓMICO</span>
-                      <span style="background:#E3F2FD;color:#1565C0;font-size:10px;padding:2px 7px;border-radius:10px">MÁS RÁPIDO</span>
-                    </div>
-                    <div style="font-size:12px;color:var(--text-m);margin-top:4px">$0.50/$3.00 por 1M tokens · Google AI · Variable: <code style="background:var(--gray-l);padding:1px 4px;border-radius:3px">GEMINI_KEY</code></div>
-                  </div>
-                </label>
-
-                <!-- Gemini 2.0 Flash -->
-                <label style="display:flex;align-items:flex-start;gap:12px;padding:14px;border:1px solid var(--border);border-radius:var(--r);cursor:pointer;transition:border .15s" id="card-gemini20">
-                  <input type="radio" name="activeModel" value="gemini-2.0-flash" style="margin-top:3px;accent-color:var(--red)">
-                  <div style="flex:1">
-                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                      <span style="font-size:13px;font-weight:600">Gemini 2.0 Flash</span>
-                      <span style="background:#FFF3E0;color:#E65100;font-size:10px;padding:2px 7px;border-radius:10px">ECONÓMICO</span>
-                    </div>
-                    <div style="font-size:12px;color:var(--text-m);margin-top:4px">~$0.10/$0.40 por 1M tokens · Google AI · Variable: <code style="background:var(--gray-l);padding:1px 4px;border-radius:3px">GEMINI_KEY</code></div>
-                  </div>
-                </label>
-
-                <!-- Claude Sonnet -->
-                <label style="display:flex;align-items:flex-start;gap:12px;padding:14px;border:1px solid var(--border);border-radius:var(--r);cursor:pointer;transition:border .15s" id="card-sonnet">
-                  <input type="radio" name="activeModel" value="claude-sonnet-4-20250514" style="margin-top:3px;accent-color:var(--red)">
-                  <div style="flex:1">
-                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                      <span style="font-size:13px;font-weight:600">Claude Sonnet 4.6</span>
-                      <span style="background:#F3E5F5;color:#6A1B9A;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:600">MAYOR CALIDAD</span>
-                    </div>
-                    <div style="font-size:12px;color:var(--text-m);margin-top:4px">$3.00/$15.00 por 1M tokens · Anthropic · Variable: <code style="background:var(--gray-l);padding:1px 4px;border-radius:3px">ANTHROPIC_KEY</code></div>
-                  </div>
-                </label>
-
-                <!-- Claude Haiku -->
-                <label style="display:flex;align-items:flex-start;gap:12px;padding:14px;border:1px solid var(--border);border-radius:var(--r);cursor:pointer;transition:border .15s" id="card-haiku">
-                  <input type="radio" name="activeModel" value="claude-haiku-4-5-20251001" style="margin-top:3px;accent-color:var(--red)">
-                  <div style="flex:1">
-                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                      <span style="font-size:13px;font-weight:600">Claude Haiku 4.5</span>
-                      <span style="background:#E8F5E9;color:#2E7D32;font-size:10px;padding:2px 7px;border-radius:10px">RÁPIDO · ANTHROPIC</span>
-                    </div>
-                    <div style="font-size:12px;color:var(--text-m);margin-top:4px">$1.00/$5.00 por 1M tokens · Anthropic · Variable: <code style="background:var(--gray-l);padding:1px 4px;border-radius:3px">ANTHROPIC_KEY</code></div>
-                  </div>
-                </label>
-
-              </div>
-              <div style="margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-                <button class="btn btn-primary btn-sm" onclick="saveModel()">Guardar modelo</button>
-                <div id="modelStatus" style="font-size:12px;color:var(--text-m)"></div>
-              </div>
-              <div style="margin-top:10px;padding:10px;background:var(--gray-l);border-radius:var(--r-s);font-size:12px;color:var(--text-m);line-height:1.6">
-                💡 El modelo seleccionado se configura como variable de entorno <code style="background:white;padding:1px 4px;border-radius:3px">ACTIVE_MODEL</code> en Vercel.
-                Ve a <strong>Vercel → Settings → Environment Variables</strong> y agrega o actualiza esa variable con el valor del modelo elegido.
-              </div>
-            </div>
-          </div>
-
-          <!-- MODEL SELECTOR -->
-          <div class="card">
-            <div class="card-body">
-              <div class="card-title">🤖 Modelo de IA</div>
-              <p style="font-size:12px;color:var(--text-m);margin-bottom:14px;line-height:1.6">
-                Elige el modelo a usar para el análisis. Para cambiar, edita <strong>ACTIVE_MODEL</strong> en Vercel → Environment Variables y haz Redeploy.
-              </p>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px" id="providerStatus">
-                <span style="font-size:12px;color:var(--text-m)">Cargando...</span>
-              </div>
-              <div style="overflow-x:auto;margin-bottom:14px">
-                <table style="width:100%;border-collapse:collapse;font-size:12px">
-                  <thead><tr style="background:var(--gray-l)">
-                    <th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-m);font-weight:500">Modelo</th>
-                    <th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-m);font-weight:500">Proveedor</th>
-                    <th style="padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-m);font-weight:500">Costo/análisis ~</th>
-                    <th style="padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-m);font-weight:500">Velocidad</th>
-                    <th style="padding:8px 10px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-m);font-weight:500">Calidad</th>
-                    <th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-m);font-weight:500">Valor ACTIVE_MODEL</th>
-                  </tr></thead>
-                  <tbody>
-                    <tr id="rowSonnet" style="border-bottom:1px solid var(--border)">
-                      <td style="padding:10px;font-weight:600">Claude Sonnet 4.6</td>
-                      <td style="padding:10px"><span class="badge badge-gray">Anthropic</span></td>
-                      <td style="padding:10px;text-align:center">~$0.06</td>
-                      <td style="padding:10px;text-align:center">⚡⚡</td>
-                      <td style="padding:10px;text-align:center">⭐⭐⭐⭐⭐</td>
-                      <td style="padding:10px;font-family:monospace;font-size:11px;color:var(--text-m)">claude-sonnet-4-6</td>
-                    </tr>
-                    <tr id="rowHaiku" style="border-bottom:1px solid var(--border)">
-                      <td style="padding:10px;font-weight:600">Claude Haiku 4.5</td>
-                      <td style="padding:10px"><span class="badge badge-gray">Anthropic</span></td>
-                      <td style="padding:10px;text-align:center">~$0.02</td>
-                      <td style="padding:10px;text-align:center">⚡⚡⚡</td>
-                      <td style="padding:10px;text-align:center">⭐⭐⭐⭐</td>
-                      <td style="padding:10px;font-family:monospace;font-size:11px;color:var(--text-m)">claude-haiku-4-5-20251001</td>
-                    </tr>
-                    <tr id="rowGemini" style="border-bottom:1px solid var(--border)">
-                      <td style="padding:10px;font-weight:600">Gemini 2.5 Flash</td>
-                      <td style="padding:10px"><span class="badge" style="background:#DBEAFE;color:#1E40AF">Google</span></td>
-                      <td style="padding:10px;text-align:center">~$0.01</td>
-                      <td style="padding:10px;text-align:center">⚡⚡⚡</td>
-                      <td style="padding:10px;text-align:center">⭐⭐⭐⭐</td>
-                      <td style="padding:10px;font-family:monospace;font-size:11px;color:var(--text-m)">gemini-2.5-flash-preview-04-17</td>
-                    </tr>
-                    <tr id="rowGPT">
-                      <td style="padding:10px;font-weight:600">GPT-5 mini</td>
-                      <td style="padding:10px"><span class="badge" style="background:#DCFCE7;color:#166534">OpenAI</span></td>
-                      <td style="padding:10px;text-align:center">~$0.01</td>
-                      <td style="padding:10px;text-align:center">⚡⚡⚡</td>
-                      <td style="padding:10px;text-align:center">⭐⭐⭐⭐</td>
-                      <td style="padding:10px;font-family:monospace;font-size:11px;color:var(--text-m)">gpt-5-mini</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div style="background:var(--gray-l);border-radius:var(--r-s);padding:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
-                <div>
-                  <div style="font-size:11px;color:var(--text-m);margin-bottom:3px">Modelo activo ahora</div>
-                  <div style="font-size:13px;font-weight:700;font-family:monospace" id="activeModelDisplay">—</div>
+              <div class="card-title">🤖 Proveedor de IA</div>
+              <div id="providerStatus" style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap"></div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Proveedor activo</label>
+                  <select class="form-input" id="modelSelect" onchange="saveModelChoice()">
+                    <option value="claude-sonnet-4-6">Anthropic — Claude Sonnet 4.6 (~$0.06/análisis)</option>
+                    <option value="claude-haiku-4-5-20251001">Anthropic — Claude Haiku 4.5 (~$0.02/análisis)</option>
+                    <option value="gemini-2.5-flash">Google — Gemini 2.5 Flash (~$0.01/análisis)</option>
+                  </select>
                 </div>
-                <div style="font-size:11px;color:var(--text-m);text-align:right">
-                  Cambia <strong>ACTIVE_MODEL</strong> en Vercel → Settings<br>→ Environment Variables → Redeploy
+                <div class="form-group" style="display:flex;align-items:flex-end">
+                  <div style="font-size:11px;color:var(--text-m);line-height:1.6;padding-bottom:2px">
+                    Cambia también <strong>ACTIVE_MODEL</strong> en<br>Vercel → Environment Variables → Redeploy
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
           <!-- PARAMS -->
+
           <div class="card">
             <div class="card-body">
               <div class="card-title">⚙️ Parámetros del análisis</div>
@@ -314,54 +200,36 @@
 async function loadProviderStatus() {
   try {
     const cfg = await loadConfig();
-    const providers = cfg.providers || {};
+    const p = cfg.providers || {};
     const active = cfg.activeModel || localStorage.getItem('ml_active_model') || 'claude-sonnet-4-6';
 
-    // Show active model
-    const el = document.getElementById('activeModelDisplay');
-    if (el) el.textContent = active;
+    // Set dropdown
+    const sel = document.getElementById('modelSelect');
+    if (sel) sel.value = active;
 
-    // Highlight active row
-    const rowMap = {
-      'claude-sonnet': 'rowSonnet',
-      'claude-haiku':  'rowHaiku',
-      'gemini':        'rowGemini',
-      'gpt':           'rowGPT'
-    };
-    Object.entries(rowMap).forEach(([key, rowId]) => {
-      const row = document.getElementById(rowId);
-      if (row && active.toLowerCase().includes(key)) {
-        row.style.background = 'var(--red-l)';
-        row.style.outline = '2px solid var(--red)';
-        const cell = row.cells[0];
-        if (cell && !cell.innerHTML.includes('Activo')) {
-          cell.innerHTML += ' <span style="background:var(--red);color:white;font-size:9px;padding:1px 6px;border-radius:10px;vertical-align:middle;margin-left:4px">Activo</span>';
-        }
-      }
-    });
-
-    // Provider status
-    const statusEl = document.getElementById('providerStatus');
-    if (!statusEl) return;
-    const items = [
-      { key: 'claude', label: 'Anthropic (Claude)', env: 'ANTHROPIC_KEY' },
-      { key: 'gemini', label: 'Google (Gemini)',    env: 'GEMINI_KEY'    },
-      { key: 'openai', label: 'OpenAI (GPT)',       env: 'OPENAI_KEY'    },
-    ];
-    statusEl.innerHTML = items.map(({ key, label, env }) => {
-      const ok = providers[key];
-      return `<div style="display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:6px;background:${ok?'#DCFCE7':'#FEE2E2'}">
-        <span style="font-weight:700;color:${ok?'#166534':'#991B1B'}">${ok?'✓':'✗'}</span>
-        <span style="font-size:12px;font-weight:500;color:${ok?'#166534':'#991B1B'}">${label}</span>
-        <span style="font-size:10px;color:${ok?'#166534':'#991B1B'};opacity:.75">${ok?'OK':env+' faltante'}</span>
-      </div>`;
-    }).join('');
-  } catch(e) {
-    console.warn('loadProviderStatus:', e);
-  }
+    // Provider badges
+    const el = document.getElementById('providerStatus');
+    if (el) {
+      el.innerHTML = [
+        { key:'claude', label:'Anthropic' },
+        { key:'gemini', label:'Google Gemini' }
+      ].map(({ key, label }) => {
+        const ok = p[key];
+        return `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:6px;font-size:12px;background:${ok?'#DCFCE7':'#FEE2E2'};color:${ok?'#166534':'#991B1B'}">
+          ${ok?'✓':'✗'} ${label} ${ok?'':'— API key faltante'}
+        </span>`;
+      }).join('');
+    }
+  } catch(e) {}
 }
 
-function loadCurrentValues() {
+function saveModelChoice() {
+  const val = document.getElementById('modelSelect')?.value;
+  if (val) localStorage.setItem('ml_active_model', val);
+  toast('Modelo guardado localmente. Recuerda actualizar ACTIVE_MODEL en Vercel.', '');
+}
+
+ {
   document.getElementById('cfgCompanyName').value = Config.companyName();
   document.getElementById('cfgAnthropicKey').value = Config.get('anthropic_key') ? '••••••••••••••••' : '';
   document.getElementById('cfgSupabaseUrl').value = Config.get('supabase_url');
