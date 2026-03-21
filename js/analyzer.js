@@ -255,7 +255,7 @@ P3: Carnes frías/embutidos (chorizo, jamón, salchicha, tocino)
 P4: Quesos y lácteos
 P5: Resto (salsas, condimentos, mieles, bebidas, aceites, etc.)
 
-REGLA CRÍTICA PARA TOP 10: El top10_skus DEBE ordenarse PRIMERO por prioridad (P1 antes que P2, P2 antes que P3, etc.) y SOLO usar menciones como desempate entre productos de la MISMA prioridad. Un producto P1 con 1 mención SIEMPRE va antes que un producto P5 con 10 menciones. Las proteínas premium SIEMPRE lideran el top 10.
+
 
 TIPOS DE COMIDA — elige el más cercano:
 Mexicana, Italiana, Americana, Mariscos, Asiática, Mediterránea,
@@ -338,10 +338,7 @@ ORDEN DEL ARRAY matching_table — OBLIGATORIO:
 - Primero todos los P1 (por menciones desc), luego P2, P3, P4, P5
 - Un P1 con 1 mención SIEMPRE va antes que un P5 con 10 menciones
 
-REGLA TOP 10 — ORDEN OBLIGATORIO:
-1. Agrupa todos los matches por prioridad
-2. Dentro de P1: ordena por menciones desc
-3. Luego P2 por menciones, luego P3, P4, P5
+
 4. NUNCA un P5 aparece antes que un P1 en el top10
 5. Si hay menos de 10 productos P1+P2, completa con P3, P4, P5
 6. El top10 refleja OPORTUNIDAD COMERCIAL, no frecuencia de texto
@@ -569,8 +566,9 @@ async function saveAnalysisToDB(analysisData, user) {
     client_number: analysisData.bizClientNum || null,
     status: 'complete',
     duration_ms: analysisData.duration || 0,
+    model_used: analysisData.model_used || null,
     dish_count: analysisData.summary?.total_dishes || 0,
-    sku_count: (analysisData.sku_table || []).length,
+    sku_count: (analysisData.sku_table || []).length + (analysisData.matching_table || []).reduce((acc,r) => acc + (r.alternatives||[]).length, 0),
     avg_price: analysisData.avg_price || 0,
     avg_price_entradas: pa.avg_entradas || 0,
     avg_price_platillos: pa.avg_platillos || 0,
