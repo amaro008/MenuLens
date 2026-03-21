@@ -114,13 +114,7 @@
                 </div>
               </div>
             </div>
-            <!-- GAPS -->
-            <div class="card" id="gapsCard" style="display:none">
-              <div class="card-body">
-                <div class="card-title">⚠️ Gaps del catálogo</div>
-                <div id="gaps"></div>
-              </div>
-            </div>
+            <!-- Gaps moved to Recomendaciones tab -->
           </div>
 
           <!-- TAB 2: SKUs DETECTADOS -->
@@ -162,13 +156,23 @@
 
           <!-- TAB 3: RECOMENDACIONES -->
           <div id="tab3" style="display:none">
+            <!-- AI RECOMMENDATIONS -->
+            <div id="recommendationsContainer"></div>
+            <!-- GAPS -->
+            <div class="card" id="gapsCard2" style="display:none;margin-top:12px">
+              <div class="card-body">
+                <div class="card-title" style="color:#D97706">⚠️ Gaps del catálogo</div>
+                <div style="font-size:12px;color:var(--text-m);margin-bottom:10px">Ingredientes del menú sin match en el catálogo actual</div>
+                <div id="gaps2"></div>
+              </div>
+            </div>
+          </div>
 
           <!-- DEBUG LOG PANEL -->
           <div id="debugPanel" style="display:none;background:#1a1a1a;color:#00ff88;font-family:monospace;font-size:11px;border-radius:8px;padding:12px;max-height:220px;overflow-y:auto;line-height:1.8">
             <div style="color:#888;margin-bottom:6px;font-size:10px">── Log de análisis ──</div>
           </div>
-          <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="toggleDebugPanel()">🔍 Ver log de análisis</button>
-
+          <button class="btn btn-outline btn-sm" style="font-size:11px;margin-top:8px" onclick="toggleDebugPanel()">🔍 Ver log</button>
           <a href="analyzer.html" class="btn btn-outline btn-sm">← Nuevo análisis</a>
         </div>
       </div>
@@ -352,9 +356,15 @@ function renderAll(d) {
   document.getElementById('matchBody').innerHTML = matchTable.map(r => {
     const dishes = esc((r.dishes||r.dish_names||[]).slice(0,3).join(', ')||'—');
     const more = (r.dishes||r.dish_names||[]).length>3 ? ` <span style="color:var(--text-m);font-size:10px">+${(r.dishes||r.dish_names||[]).length-3} más</span>` : '';
-    const alts = (r.alternatives||[]).slice(0,3).map(a =>
-      `<span style="display:inline-block;background:var(--gray-l);border:0.5px solid var(--border);border-radius:4px;padding:1px 5px;font-size:10px;margin:1px;color:var(--text-m)" title="${esc(a.material||a||'')}">${esc(a.sku||a||'')}</span>`
-    ).join('');
+    const alts = (r.alternatives||[]).slice(0,3).map(a => {
+      const altSku = esc(a.sku||a||'');
+      const altMat = esc(a.material||'');
+      // Show SKU + abbreviated material (first 3 words)
+      const matShort = altMat ? altMat.split(' ').slice(0,3).join(' ') : '';
+      return `<span style="display:inline-block;background:var(--gray-l);border:0.5px solid var(--border);border-radius:4px;padding:2px 6px;font-size:10px;margin:1px;color:var(--text-m)" title="${altMat}">
+        <strong style="color:var(--text)">${altSku}</strong>${matShort ? ` <span style="color:var(--text-m)">${matShort}${altMat.split(' ').length>3?'…':''}</span>` : ''}
+      </span>`;
+    }).join('');
     const isGap = !r.sku || r.match_type==='No encontrado';
     const pCol = PRIO_COLORS[r.priority||'P5']||PRIO_COLORS.P5;
     const confStyle = r.confidence==='Alta'||r.confianza==='Alta'?'color:#16A34A;font-weight:500':r.confidence==='Media'||r.confianza==='Media'?'color:#D97706;font-weight:500':'color:#C8102E';
@@ -369,19 +379,69 @@ function renderAll(d) {
     </tr>`;
   }).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--text-l);padding:20px">Sin datos de matching</td></tr>';
 
-  // ── GAPS ──
+  // ── GAPS → moved to Recommendations tab ──
   const gaps = d.gaps||[];
-  const gapsCard = document.getElementById('gapsCard');
-  if (gapsCard && gaps.length) {
-    gapsCard.style.display = 'block';
-    document.getElementById('gaps').innerHTML = gaps.map(g =>
-      `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:#D97706">⚠</span><span>${esc(g)}</span></div>`
+
+  // ── RECOMMENDATIONS (Tab 3) ──
+  const recs = d.recommendations || [];
+  const recContainer = document.getElementById('recommendationsContainer');
+  if (recContainer) {
+    const typeStyles = {
+      pitch:       {bg:'#EFF6FF', border:'#BFDBFE', title:'#1E40AF', badge:'#DBEAFE', badgeText:'#1E40AF', label:'Pitch'},
+      producto:    {bg:'#FCEBEB', border:'#FECACA', title:'#991B1B', badge:'#FECACA', badgeText:'#991B1B', label:'Producto'},
+      oportunidad: {bg:'#FFFBE6', border:'#FDE047', title:'#854F0B', badge:'#FEF3C7', badgeText:'#92400E', label:'Oportunidad'},
+      alerta:      {bg:'#FFF7ED', border:'#FED7AA', title:'#9A3412', badge:'#FED7AA', badgeText:'#9A3412', label:'Alerta'}
+    };
+
+    if (recs.length) {
+      recContainer.innerHTML = recs.map((r, i) => {
+        const ts = typeStyles[r.type] || typeStyles.oportunidad;
+        return `<div style="border:1px solid ${ts.border};background:${ts.bg};border-radius:var(--r);padding:16px;margin-bottom:12px">
+          <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:8px">
+            <div style="width:28px;height:28px;border-radius:50%;background:${ts.badge};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:${ts.badgeText};flex-shrink:0">${i+1}</div>
+            <div style="flex:1">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+                <div style="font-size:14px;font-weight:600;color:${ts.title}">${esc(r.title||'—')}</div>
+                <span style="background:${ts.badge};color:${ts.badgeText};font-size:10px;padding:1px 6px;border-radius:10px;font-weight:500">${ts.label}</span>
+              </div>
+              <div style="font-size:13px;color:var(--text);line-height:1.6">${esc(r.body||'—')}</div>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+    } else {
+      recContainer.innerHTML = '<div style="color:var(--text-l);font-size:13px;padding:20px;text-align:center">Sin recomendaciones disponibles. Analiza un menú para ver sugerencias personalizadas.</div>';
+    }
+  }
+
+  // Gaps in recommendations tab
+  const gapsCard2 = document.getElementById('gapsCard2');
+  if (gapsCard2 && gaps.length) {
+    gapsCard2.style.display = 'block';
+    document.getElementById('gaps2').innerHTML = gaps.map(g =>
+      `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <span style="color:#D97706;flex-shrink:0">⚠</span>
+        <span>${esc(g)}</span>
+      </div>`
     ).join('');
   }
 
   // ── SKU TABLE (Tab 2) ──
   const prioOrder2 = {P1:1,P2:2,P3:3,P4:4,P5:5};
-  let skuData = [...(d.sku_table||[])].sort((a,b) =>
+  // Include main SKUs + alternatives from matching table
+  const altSkus = [];
+  (d.matching_table||[]).forEach(r => {
+    (r.alternatives||[]).forEach(a => {
+      if (a.sku && !d.sku_table?.find(s => s.sku === a.sku)) {
+        altSkus.push({
+          sku: a.sku, material: a.material||'', brand: r.brand||'',
+          familia: r.familia||'', sublinea: r.sublinea||'',
+          priority: r.priority||'P5', mentions: 0, _isAlt: true
+        });
+      }
+    });
+  });
+  let skuData = [...(d.sku_table||[]), ...altSkus].sort((a,b) =>
     (prioOrder2[a.priority||'P5']||5)-(prioOrder2[b.priority||'P5']||5)||
     (b.mentions||0)-(a.mentions||0));
 
@@ -407,15 +467,15 @@ function renderAll(d) {
         prevPrio=prio;
         hdr=`<tr><td colspan="8" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-m);padding:12px 10px 6px;border-top:1px solid var(--border);background:var(--gray-l)">${labels[prio]||prio}</td></tr>`;
       }
-      return hdr+`<tr>
+      return hdr+`<tr ${r._isAlt?'style="opacity:0.7"':''}>
         <td style="color:var(--text-m)">${i+1}</td>
-        <td style="font-family:monospace;font-size:11px">${esc(r.sku||'—')}</td>
-        <td style="font-size:12px;font-weight:500">${esc(r.material||'—')}</td>
+        <td style="font-family:monospace;font-size:11px">${esc(r.sku||'—')}${r._isAlt?'<span style="font-size:9px;color:var(--text-l);margin-left:4px">alt</span>':''}</td>
+        <td style="font-size:12px;font-weight:${r._isAlt?'400':'500'}">${esc(r.material||'—')}</td>
         <td>${esc(r.brand||r.marca||'—')}</td>
         <td><span style="font-size:10px;background:var(--gray-l);padding:1px 5px;border-radius:3px">${esc(r.familia||r.family||'—')}</span></td>
         <td style="font-size:11px;color:var(--text-m)">${esc(r.sublinea||'—')}</td>
         <td><span class="badge" style="background:${col.bg};color:${col.text};font-size:9px">${prio}</span></td>
-        <td style="text-align:center;font-weight:600">${r.mentions||0}</td>
+        <td style="text-align:center;font-weight:600">${r._isAlt?'<span style="color:var(--text-l)">alt</span>':r.mentions||0}</td>
       </tr>`;
     }).join('')||'<tr><td colspan="8" style="text-align:center;color:var(--text-l);padding:20px">Sin datos</td></tr>';
   }
