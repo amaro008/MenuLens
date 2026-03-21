@@ -480,11 +480,21 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
   });
 
   if (!resp.ok) {
-    const err = await resp.json();
-    throw new Error(err.error || 'Error en el análisis (' + resp.status + ')');
+    let errMsg = 'Error en el análisis (' + resp.status + ')';
+    try { const err = await resp.json(); errMsg = err.error || errMsg; } catch(e) {}
+    throw new Error(errMsg);
   }
 
-  const data = await resp.json();
+  let data;
+  try {
+    data = await resp.json();
+  } catch(e) {
+    throw new Error('Respuesta inválida del servidor. Posible timeout de Vercel (10s). Intenta con Claude Haiku o Vercel Pro.');
+  }
+  if (!data.content?.[0]?.text) {
+    dbg('Respuesta completa: ' + JSON.stringify(data).substring(0, 300));
+    throw new Error('El modelo no devolvió contenido. ' + (data.error || JSON.stringify(data).substring(0,100)));
+  }
   const raw = data.content[0].text.trim();
   dbg(`Respuesta Claude (inicio): ${raw.substring(0, 150)}`); dbg(`Stop reason: ${data.stop_reason} | tokens usados: ${data.usage?.output_tokens}`);
 
