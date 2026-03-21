@@ -76,7 +76,11 @@ async function callGemini(req, res, { model, max_tokens, system, messages }) {
   console.log('[analyze] Gemini URL model:', geminiModel);
   const body = {
     contents: geminiContents,
-    generationConfig: { maxOutputTokens: max_tokens || 16000, temperature: 0.1, responseMimeType: 'application/json' }
+    generationConfig: {
+      maxOutputTokens: 65536,
+      temperature: 0.1,
+      thinkingConfig: { thinkingBudget: 0 }  // disable thinking tokens to maximize output
+    }
   };
   if (system) body.systemInstruction = { parts: [{ text: system }] };
 
@@ -84,12 +88,21 @@ async function callGemini(req, res, { model, max_tokens, system, messages }) {
   const data = await r.json();
   if (!r.ok) return res.status(r.status).json({ error: data.error?.message || 'Gemini error: ' + JSON.stringify(data).substring(0,200) });
 
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const part = data.candidates?.[0]?.content?.parts?.[0];
+  let text = '';
+  if (typeof part?.text === 'string') text = part.text;
+  else if (part?.text) text = JSON.stringify(part.text);
+  else if (part) text = JSON.stringify(part);
+
+  const finishReason = data.candidates?.[0]?.finishReason;
+  const outputTokens = data.usageMetadata?.candidatesTokenCount || 0;
+  console.log(`[gemini] finish:${finishReason} tokens:${outputTokens} textLen:${text.length}`);
+
   res.setHeader('Cache-Control', 'no-store');
   return res.status(200).json({
     content: [{ type: 'text', text }],
-    stop_reason: data.candidates?.[0]?.finishReason === 'STOP' ? 'end_turn' : 'max_tokens',
-    usage: { output_tokens: data.usageMetadata?.candidatesTokenCount || 0 }
+    stop_reason: finishReason === 'STOP' ? 'end_turn' : (finishReason === 'MAX_TOKENS' ? 'max_tokens' : 'end_turn'),
+    usage: { output_tokens: outputTokens }
   });
 }
 
