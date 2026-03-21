@@ -77,14 +77,23 @@ async function callGemini(req, res, { model, max_tokens, system, messages }) {
   const body = {
     contents: geminiContents,
     generationConfig: {
-      maxOutputTokens: 65536,
+      maxOutputTokens: 32768,
       temperature: 0.1,
-      thinkingConfig: { thinkingBudget: 0 }  // disable thinking tokens to maximize output
+      thinkingConfig: { thinkingBudget: 0 }
     }
   };
   if (system) body.systemInstruction = { parts: [{ text: system }] };
 
-  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  // 90 second timeout for Gemini
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 90000);
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: controller.signal
+  });
+  clearTimeout(timeout);
   const data = await r.json();
   if (!r.ok) return res.status(r.status).json({ error: data.error?.message || 'Gemini error: ' + JSON.stringify(data).substring(0,200) });
 
