@@ -20,8 +20,9 @@ export default async function handler(req, res) {
   const authHeader = req.headers.authorization || '';
   if (!authHeader.startsWith('Bearer ')) return res.status(401).json({ error: 'Autenticación requerida' });
 
-  const { model, max_tokens, system, messages } = req.body;
-  if (!model) return res.status(400).json({ error: 'model requerido' });
+  const { model: reqModel, max_tokens, system, messages } = req.body;
+  // Use model from request, fallback to env var, fallback to claude haiku (fast + cheap)
+  const model = reqModel || process.env.ACTIVE_MODEL || 'claude-haiku-4-5-20251001';
 
   const provider = model.startsWith('gemini') ? 'gemini'
     : (model.startsWith('gpt') || model.startsWith('o1') || model.startsWith('o3')) ? 'openai'
