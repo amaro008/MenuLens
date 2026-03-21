@@ -310,9 +310,28 @@ Dentro de la familia, elegir el producto más lógico según nombre y precio del
 PASO 3 — REPORTAR:
 - Match por Sublínea → Confianza Alta
 - Match por Material → Confianza Media
-- Producto genérico → reportar MEJOR opción + 2-3 alternativas
+- Producto genérico → MEJOR opción + hasta 3 alternativas con {sku, material completo}
 - GAP solo si genuinamente no hay nada en el catálogo
 - NUNCA gap para: arrachera, t-bone, cowboy, short rib, ribeye, camarón, pulpo, langosta, alitas, chorizo
+
+CAMPOS OBLIGATORIOS EN matching_table (TODOS los campos):
+- "dishes": array con nombres de platillos donde aparece este ingrediente (máx 5)
+- "mentions": número de platillos donde aparece
+- "familia": familia del SKU recomendado (ej: "RES", "PESCADOS Y MARISCOS")
+- "sublinea": sublínea del SKU recomendado (ej: "RIBEYE", "CAMARON")
+- "alternatives": hasta 3 con {sku, material} donde material es el nombre completo del producto
+
+CAMPOS OBLIGATORIOS EN sku_table:
+- "familia": familia del producto
+- "sublinea": sublínea del producto
+
+INSTRUCCIONES PARA recommendations — genera EXACTAMENTE 5 puntos estratégicos para el asesor:
+1. (tipo "producto") Ingrediente principal: mayor volumen de uso, producto específico a ofrecer
+2. (tipo "pitch") Tier del restaurante: qué línea recomendar (premium CAB/PRIME vs estándar)
+3. (tipo "pitch") Táctica de entrada: cómo iniciar la conversación de ventas
+4. (tipo "oportunidad") Gap o área de oportunidad no cubierta
+5. (tipo "oportunidad") Potencial de la cuenta: volumen estimado y productos ancla
+Formato: {title: "título corto", body: "2-3 oraciones concretas y accionables", type: "pitch|producto|oportunidad|alerta"}
 
 REGLA TOP 10 — ORDEN OBLIGATORIO:
 1. Agrupa todos los matches por prioridad
@@ -346,14 +365,24 @@ CERO texto antes o después. CERO bloques de código. CERO explicaciones. SOLO e
     "menu_diversity": 0
   },
   "dishes": [{"name":"","category":"","category_type":"entrada|platillo|postre|bebida|otro","price":"","price_num":0,"description":"","ingredients":[{"name":"","implicit":false,"ambiguous":false}],"protein_type":"","cooking_method":"","is_premium":false}],
-  "sku_table": [{"rank":1,"sku":"","material":"","brand":"","type":"","priority":"P1","mentions":0}],
+  "sku_table": [{"rank":1,"sku":"","material":"","brand":"","familia":"","sublinea":"","type":"","priority":"P1","mentions":0}],
   "matching_table": [{
-    "ingredient":"","sku":"","material":"","brand":"","family":"","sales_line":"",
+    "ingredient":"","sku":"","material":"","brand":"","familia":"","sublinea":"","sales_line":"",
     "match_type":"Exacto","confidence":"Alta","confidence_reason":"",
-    "priority":"P1","alternatives":[{"sku":"","material":""}]
+    "priority":"P1",
+    "dishes":["nombre del platillo donde aparece este ingrediente"],
+    "mentions":1,
+    "alternatives":[{"sku":"","material":""}]
   }],
   "gaps": ["ingredientes frecuentes no cubiertos por el catálogo"],
-  "avg_price": 0
+  "avg_price": 0,
+  "recommendations": [
+    {
+      "title": "título corto del punto",
+      "body": "texto de 2-3 oraciones con el consejo concreto para el asesor",
+      "type": "pitch|producto|oportunidad|alerta"
+    }
+  ]
 }`;
 }
 
