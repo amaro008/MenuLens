@@ -183,11 +183,7 @@ function buildSmartCatalogSummary() {
   catalogData.forEach(r => {
     const familia = normalize(r.Familia || r.familia || '');
     const keywords = r.Keywords || r.keywords || r.KEYWORDS || '';
-    // Compact: truncate material to 35 chars, drop Línea/Marca (saves ~40% tokens)
-    const mat = (r.Material||r.material||'').substring(0,28);
-    const sub = r['Sublínea']||r.sublinea||'';
-    const kw  = r.Keywords||r.keywords||'';
-    const line = kw ? `${r.SKU||r.sku}|${mat}|${familia}|${sub}|${kw}` : `${r.SKU||r.sku}|${mat}|${familia}|${sub}`;
+    const line = `SKU:${r.SKU||r.sku||''}|Material:${r.Material||r.material||''}|Marca:${r.Marca||r.marca||''}|Familia:${familia}|Sublinea:${r['Sublínea']||r.sublinea||''}|Línea:${r['Línea de Ventas']||r.linea_ventas||''}${keywords ? '|Keywords:'+keywords : ''}`;
 
     if (PRIORITY_FAMILIES.includes(familia)) {
       priorityProducts.push(line);
@@ -199,26 +195,15 @@ function buildSmartCatalogSummary() {
   });
 
   // Build final list: ALL priority + up to 200 secondary + up to 100 other
-  // Hard cap: max 60k chars total to leave room for output tokens
-  const MAX_CATALOG_CHARS = 60000;
-  let combined = [
+  const finalList = [
     ...priorityProducts,
-    ...secondaryProducts.slice(0, 80),
-    ...otherProducts.slice(0, 20)
+    ...secondaryProducts.slice(0, 200),
+    ...otherProducts.slice(0, 100)
   ];
 
-  // Trim if over limit
-  let totalChars = 0;
-  const trimmed = [];
-  for (const line of combined) {
-    if (totalChars + line.length > MAX_CATALOG_CHARS) break;
-    trimmed.push(line);
-    totalChars += line.length + 1;
-  }
+  dbg(`Catálogo: ${catalogData.length} total → ${priorityProducts.length} proteína + ${Math.min(secondaryProducts.length,200)} secundarios = ${finalList.length} enviados a Claude`);
 
-  dbg(`Catálogo: ${catalogData.length} total → ${priorityProducts.length} proteína → ${trimmed.length} enviados (${Math.round(totalChars/1000)}k chars)`);
-
-  return trimmed.join('\n');
+  return finalList.join('\n');
 }
 
 // ── BUILD SYSTEM PROMPT ───────────────
@@ -226,11 +211,10 @@ function buildSystemPrompt() {
   const catalogSummary = buildSmartCatalogSummary();
   const synonymMap = buildSublineaSynonymMap();
 
-  // Format synonym map — top terms only to keep prompt lean
+  // Format synonym map for the prompt
   const synonymMapText = Object.entries(synonymMap)
-    .slice(0, 25) // limit to 25 most important
-    .map(([term, subs]) => `${term}→${subs[0]}`)
-    .join(', ');
+    .map(([term, subs]) => `  "${term}" → Sublínea: ${subs.join(' o ')}`)
+    .join('\n');
 
   return buildSystemPromptWithCatalog(catalogSummary, synonymMapText);
 }
@@ -271,14 +255,7 @@ P3: Carnes frías/embutidos (chorizo, jamón, salchicha, tocino)
 P4: Quesos y lácteos
 P5: Resto (salsas, condimentos, mieles, bebidas, aceites, etc.)
 
-REGLA CRÍTICA PARA TOP 10 Y MATCHING — OBLIGATORIO:
-1. El array matching_table DEBE ordenarse: primero todos los P1, luego P2, P3, P4, P5
-2. Dentro de cada prioridad, ordenar por número de menciones descendente
-3. NUNCA dejar sku vacío si hay un producto en el catálogo que aplique
-4. NUNCA dejar dishes vacío — siempre listar los platillos donde aparece el ingrediente
-5. Si no hay match exacto, poner el más cercano con confidence "Baja"
-6. Solo poner match_type "No encontrado" si genuinamente no existe nada en el catálogo
-7. El top10_skus también va ordenado P1→P5, menciones como desempate
+REGLA CRÍTICA PARA TOP 10: El top10_skus DEBE ordenarse PRIMERO por prioridad (P1 antes que P2, P2 antes que P3, etc.) y SOLO usar menciones como desempate entre productos de la MISMA prioridad. Un producto P1 con 1 mención SIEMPRE va antes que un producto P5 con 10 menciones. Las proteínas premium SIEMPRE lideran el top 10.
 
 TIPOS DE COMIDA — elige el más cercano:
 Mexicana, Italiana, Americana, Mariscos, Asiática, Mediterránea,
@@ -307,7 +284,8 @@ REGLA DE CONTEXTO (CRÍTICA para desambiguar):
 - "atún" en sándwich → ABARROTES puede ser válido
 - Usar Keywords del catálogo si están disponibles para confirmar el match
 
-MAPA SUBLÍNEAS: ${synonymMapText || "usar búsqueda por Material"}
+MAPA DE SUBLÍNEAS — PUNTO DE PARTIDA PARA MATCHING:
+${synonymMapText || "(mapa no disponible)"}
 
 ESTRATEGIA DE MATCHING EN 3 PASOS:
 
@@ -332,32 +310,9 @@ Dentro de la familia, elegir el producto más lógico según nombre y precio del
 PASO 3 — REPORTAR:
 - Match por Sublínea → Confianza Alta
 - Match por Material → Confianza Media
-- Producto genérico → MEJOR opción + hasta 3 alternativas con {sku, material completo}
+- Producto genérico → reportar MEJOR opción + 2-3 alternativas
 - GAP solo si genuinamente no hay nada en el catálogo
 - NUNCA gap para: arrachera, t-bone, cowboy, short rib, ribeye, camarón, pulpo, langosta, alitas, chorizo
-- NUNCA reportar como gap: frutas (piña, mango, limón, fresa, naranja, coco, etc.),
-  verduras frescas (pepino, lechuga, arúgula, espinaca, chile, jitomate, pimiento, cebolla,
-  zanahoria, betabel, apio, brócoli, etc.), hierbas frescas (cilantro, perejil, albahaca,
-  romero, tomillo, etc.) — estos NO son productos de una distribuidora de alimentos
-
-CAMPOS OBLIGATORIOS EN matching_table (TODOS los campos):
-- "dishes": array con nombres de platillos donde aparece este ingrediente (máx 5)
-- "mentions": número de platillos donde aparece
-- "familia": familia del SKU recomendado (ej: "RES", "PESCADOS Y MARISCOS")
-- "sublinea": sublínea del SKU recomendado (ej: "RIBEYE", "CAMARON")
-- "alternatives": hasta 3 con {sku, material} donde material es el nombre completo del producto
-
-CAMPOS OBLIGATORIOS EN sku_table:
-- "familia": familia del producto
-- "sublinea": sublínea del producto
-
-INSTRUCCIONES PARA recommendations — genera EXACTAMENTE 5 puntos estratégicos para el asesor:
-1. (tipo "producto") Ingrediente principal: mayor volumen de uso, producto específico a ofrecer
-2. (tipo "pitch") Tier del restaurante: qué línea recomendar (premium CAB/PRIME vs estándar)
-3. (tipo "pitch") Táctica de entrada: cómo iniciar la conversación de ventas
-4. (tipo "oportunidad") Gap o área de oportunidad no cubierta
-5. (tipo "oportunidad") Potencial de la cuenta: volumen estimado y productos ancla
-Formato: {title: "título corto", body: "2-3 oraciones concretas y accionables", type: "pitch|producto|oportunidad|alerta"}
 
 REGLA TOP 10 — ORDEN OBLIGATORIO:
 1. Agrupa todos los matches por prioridad
@@ -391,24 +346,14 @@ CERO texto antes o después. CERO bloques de código. CERO explicaciones. SOLO e
     "menu_diversity": 0
   },
   "dishes": [{"name":"","category":"","category_type":"entrada|platillo|postre|bebida|otro","price":"","price_num":0,"description":"","ingredients":[{"name":"","implicit":false,"ambiguous":false}],"protein_type":"","cooking_method":"","is_premium":false}],
-  "sku_table": [{"rank":1,"sku":"","material":"","brand":"","familia":"","sublinea":"","type":"","priority":"P1","mentions":0}],
+  "sku_table": [{"rank":1,"sku":"","material":"","brand":"","type":"","priority":"P1","mentions":0}],
   "matching_table": [{
-    "ingredient":"","sku":"","material":"","brand":"","familia":"","sublinea":"","sales_line":"",
+    "ingredient":"","sku":"","material":"","brand":"","family":"","sales_line":"",
     "match_type":"Exacto","confidence":"Alta","confidence_reason":"",
-    "priority":"P1",
-    "dishes":["nombre del platillo donde aparece este ingrediente"],
-    "mentions":1,
-    "alternatives":[{"sku":"","material":""}]
+    "priority":"P1","alternatives":[{"sku":"","material":""}]
   }],
   "gaps": ["ingredientes frecuentes no cubiertos por el catálogo"],
-  "avg_price": 0,
-  "recommendations": [
-    {
-      "title": "título corto del punto",
-      "body": "texto de 2-3 oraciones con el consejo concreto para el asesor",
-      "type": "pitch|producto|oportunidad|alerta"
-    }
-  ]
+  "avg_price": 0
 }`;
 }
 
@@ -426,7 +371,7 @@ function buildReducedPrompt() {
   console.log(`Reduced catalog: ${reduced.length} products`);
 
   const catalogSummary = reduced.map(r =>
-    `${r.SKU||r.sku||''}|${(r.Material||r.material||'').substring(0,35)}|${(r.Familia||r.familia||'').toUpperCase()}|${r['Sublínea']||r.sublinea||''}`
+    `SKU:${r.SKU||r.sku||''}|Material:${r.Material||r.material||''}|Marca:${r.Marca||r.marca||''}|Familia:${(r.Familia||r.familia||'').toUpperCase()}|Sublinea:${r['Sublínea']||r.sublinea||''}`
   ).join('\n');
 
   return buildSystemPromptWithCatalog(catalogSummary);
@@ -460,32 +405,12 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
     finalPrompt = buildReducedPrompt();
   }
 
-  // Get current session JWT for auth header
-  let authHeader = {};
-  try {
-    const sb = await getSupabaseAsync();
-    if (sb) {
-      const { data: { session } } = await sb.auth.getSession();
-      if (session?.access_token) {
-        authHeader = { 'Authorization': `Bearer ${session.access_token}` };
-      }
-    }
-  } catch(e) { /* continue without auth in demo mode */ }
-
   // Llamar a /api/analyze (proxy serverless en Vercel — evita CORS)
-  // Use model from config (set in Admin → Configuración → Modelo de IA)
-  // localStorage wins — set by Admin → Configuración dropdown
-  // _mlConfig.activeModel is the Vercel env var default (lower priority)
-  const activeModel = localStorage.getItem('ml_active_model')
-    || window._mlConfig?.activeModel
-    || 'claude-haiku-4-5-20251001';
-  dbg(`Modelo activo: ${activeModel}`);
-
   const resp = await fetch('/api/analyze', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeader },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: activeModel,
+      model: localStorage.getItem('ml_active_model') || 'claude-sonnet-4-6',
       max_tokens: 16000,
       system: finalPrompt,
       messages: [{ role: 'user', content: userContent }]
@@ -493,21 +418,11 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
   });
 
   if (!resp.ok) {
-    let errMsg = 'Error en el análisis (' + resp.status + ')';
-    try { const err = await resp.json(); errMsg = err.error || errMsg; } catch(e) {}
-    throw new Error(errMsg);
+    const err = await resp.json();
+    throw new Error(err.error || 'Error en el análisis (' + resp.status + ')');
   }
 
-  let data;
-  try {
-    data = await resp.json();
-  } catch(e) {
-    throw new Error('Respuesta inválida del servidor. Posible timeout de Vercel (10s). Intenta con Claude Haiku o Vercel Pro.');
-  }
-  if (!data.content?.[0]?.text) {
-    dbg('Respuesta completa: ' + JSON.stringify(data).substring(0, 300));
-    throw new Error('El modelo no devolvió contenido. ' + (data.error || JSON.stringify(data).substring(0,100)));
-  }
+  const data = await resp.json();
   const raw = data.content[0].text.trim();
   dbg(`Respuesta Claude (inicio): ${raw.substring(0, 150)}`); dbg(`Stop reason: ${data.stop_reason} | tokens usados: ${data.usage?.output_tokens}`);
 
@@ -580,106 +495,7 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
     };
   }
 
-  // Post-process: normalize and sort regardless of model
-  parsed = normalizeAnalysisResult(parsed);
   return parsed;
-}
-
-// ── POST-PROCESSING ───────────────────
-function normalizeAnalysisResult(d) {
-  if (!d) return d;
-  const PRIO = { P1:1, P2:2, P3:3, P4:4, P5:5 };
-  const gp = r => PRIO[r.priority||r.prioridad||'P5'] || 5;
-
-  // Sort matching_table P1→P5
-  if (Array.isArray(d.matching_table)) {
-    d.matching_table = d.matching_table
-      .filter(r => r.ingredient || r.ingredient_name)
-      .sort((a,b) => gp(a)-gp(b) || (b.mentions||1)-(a.mentions||1))
-      .map(r => ({
-        ...r,
-        ingredient:      r.ingredient || r.ingredient_name || r.ingrediente || '',
-        ingredient_name: r.ingredient || r.ingredient_name || r.ingrediente || '',
-        sku:       r.sku || r.SKU || '',
-        material:  r.material || r.Material || '',
-        brand:     r.brand || r.Brand || r.marca || r.Marca || '',
-        familia:   r.familia || r.Familia || r.family || '',
-        sublinea:  r.sublinea || r.Sublinea || '',
-        priority:  r.priority || r.prioridad || 'P5',
-        confidence:r.confidence || r.confianza || (r.sku ? 'Media' : 'Baja'),
-        dishes:    r.dishes || r.platillos || r.dish_names || [],
-        mentions:  r.mentions || r.menciones || (r.dishes||[]).length || 1,
-        alternatives: (r.alternatives || r.alternativas || []).map(a =>
-          typeof a === 'string' ? {sku:a, material:''} : a
-        )
-      }));
-  }
-
-  // Sort sku_table P1→P5
-  if (Array.isArray(d.sku_table)) {
-    d.sku_table = d.sku_table
-      .filter(r => r.sku || r.SKU)
-      .sort((a,b) => gp(a)-gp(b) || (b.mentions||0)-(a.mentions||0))
-      .map(r => ({
-        ...r,
-        sku:     r.sku || r.SKU || '',
-        material:r.material || r.Material || '',
-        brand:   r.brand || r.marca || '',
-        familia: r.familia || r.Familia || r.family || '',
-        sublinea:r.sublinea || r.Sublinea || '',
-        priority:r.priority || r.prioridad || 'P5',
-        mentions:r.mentions || r.menciones || 0
-      }));
-  }
-
-  // Sort top10_skus
-  const s = d.summary || {};
-  if (Array.isArray(s.top10_skus)) {
-    s.top10_skus.sort((a,b) => gp(a)-gp(b) || (b.mentions||0)-(a.mentions||0));
-  }
-
-  // Filter gaps — remove fruits, vegetables, herbs, condiments not in distributor catalog
-  if (Array.isArray(d.gaps)) {
-    const EXCLUDE_TERMS = [
-      // Verduras
-      'pepino','lechuga','arugula','arúgula','espinaca','acelga','betabel','zanahoria',
-      'apio','brócoli','brocoli','coliflor','cebolla','cebollín','cebollin','poro',
-      'pimiento','chile','jalapeño','jalapeno','serrano','habanero','poblano','pasilla',
-      'ancho','mulato','guajillo','chipotle','epazote','hierba','hierbas','cilantro',
-      'perejil','albahaca','romero','tomillo','orégano','oregano','laurel','menta',
-      'estragón','estragon','eneldo','cebolleta','chivo','jitomate','tomate','tomatillo',
-      'aguacate','guacamole',
-      // Frutas
-      'piña','pina','mango','papaya','manzana','naranja','limón','limon','lima',
-      'fresa','frambuesa','mora','arándano','arandano','uva','sandía','sandia',
-      'melón','melon','kiwi','maracuyá','maracuya','coco','plátano','platano',
-      'durazno','melocotón','melocoton','higo','dátil','datil','pera',
-      // Condimentos básicos / especias
-      'sal ','pimienta negra','pimienta blanca','azúcar','azucar','vinagre',
-      'agua ','aceite vegetal','aceite de girasol',
-      // Hongos frescos
-      'champiñon','champiñón','hongo','seta','portobello',
-    ];
-
-    const normalize = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-    d.gaps = d.gaps.filter(gap => {
-      const g = normalize(gap);
-      return !EXCLUDE_TERMS.some(term => g.includes(normalize(term)));
-    });
-  }
-
-  // Normalize recommendations
-  if (Array.isArray(d.recommendations)) {
-    d.recommendations = d.recommendations
-      .map(r => ({
-        title: r.title || r.titulo || '',
-        body:  r.body  || r.cuerpo || r.descripcion || r.description || '',
-        type:  r.type  || r.tipo  || 'oportunidad'
-      }))
-      .filter(r => r.title && r.body);
-  }
-
-  return d;
 }
 
 // ── SAVE TO DB ────────────────────────
