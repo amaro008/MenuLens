@@ -185,24 +185,26 @@
 <script>
 let _data = null;
 
-// XSS sanitizer — escapes HTML special chars in user/AI data before innerHTML injection
+// XSS sanitizer
 function esc(str) {
   if (!str) return '';
   return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+function getCurrentAnalysis() {
+  try { return JSON.parse(sessionStorage.getItem('ml_current_analysis') || 'null'); }
+  catch(e) { return null; }
+}
+
+// ── INIT ──────────────────────────────
 (async () => {
   const user = await requireAuth();
   if (!user) return;
   renderTopbar(user, false);
   renderSidebar(currentPage, user.role);
 
-  // Try to load from URL param first, then sessionStorage
   const params = new URLSearchParams(window.location.search);
   const analysisId = params.get('id');
 
@@ -215,36 +217,46 @@ function esc(str) {
   }
 })();
 
-function getCurrentAnalysis() {
-  try {
-    const raw = sessionStorage.getItem('ml_current_analysis');
-    return raw ? JSON.parse(raw) : null;
-  } catch(e) { return null; }
-}
-
 async function loadFromDB(id) {
   const sb = getSupabase();
-  if (!sb) { _data = getCurrentAnalysis(); renderAll(_data); return; }
+  if (!sb) { _data = getCurrentAnalysis(); if(_data) renderAll(_data); return; }
   showLoading('Cargando análisis…', '');
-  const { data } = await sb.from('analyses')
-    .select('*, restaurants(*)')
-    .eq('id', id).single();
+  const { data } = await sb.from('analyses').select('*, restaurants(*)').eq('id', id).single();
   hideLoading();
   if (data?.raw_json) {
-    _data = { ...data.raw_json, restaurant_name: data.restaurants?.name, food_type: data.restaurants?.food_type, bizCity: data.restaurants?.city };
+    _data = {
+      ...data.raw_json,
+      restaurant_name: data.restaurants?.name || data.raw_json?.restaurant_name,
+      food_type: data.restaurants?.food_type || data.raw_json?.food_type,
+      bizClientNum: data.client_number || data.raw_json?.bizClientNum || '',
+    };
     renderAll(_data);
   }
 }
 
+// ── TABS ──────────────────────────────
+function switchTab(idx) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', i===idx));
+  document.querySelectorAll('[id^="tab"]').forEach((p,i) => p.style.display = i===idx?'block':'none');
+}
+
+// ── RENDER ────────────────────────────
+const PRIO_COLORS = {
+  P1:{bg:'#FCEBEB',text:'#A32D2D'},
+  P2:{bg:'#FAEEDA',text:'#854F0B'},
+  P3:{bg:'#EAF3DE',text:'#3B6D11'},
+  P4:{bg:'#E6F1FB',text:'#185FA5'},
+  P5:{bg:'#F1EFE8',text:'#5F5E5A'}
+};
+
 function renderAll(d) {
-  if (!d) { console.error('renderAll: no data'); return; }
-  console.log('renderAll data keys:', Object.keys(d));
-  console.log('summary:', d.summary);
-  console.log('matching_table length:', (d.matching_table||[]).length);
-  console.log('sku_table length:', (d.sku_table||[]).length);
+  if (!d) return;
+  console.log('renderAll keys:', Object.keys(d));
+  console.log('matching_table:', (d.matching_table||[]).length, 'sku_table:', (d.sku_table||[]).length);
+
   const s = d.summary || {};
 
-  // ── HEADER ──────────────────────────
+  // ── HEADER ──
   document.getElementById('resName').textContent = d.restaurant_name || d.bizName || '—';
   document.getElementById('resFoodType').textContent = d.food_type || '—';
   if (d.bizClientNum) {
@@ -252,16 +264,16 @@ function renderAll(d) {
     if (cn) { cn.textContent = 'Cliente #' + d.bizClientNum; cn.style.display = 'inline-flex'; }
   }
 
-  // ── PRICE ANALYSIS ───────────────────
+  // ── PRICE ANALYSIS ──
   const pa = d.price_analysis || {};
-  const tierColors = { economico: '#16A34A', medio: '#D97706', premium: '#C8102E' };
-  const tierLabels = { economico: 'Económico', medio: 'Nivel medio', premium: 'Premium' };
+  const tierColors = {economico:'#16A34A',medio:'#D97706',premium:'#C8102E'};
+  const tierLabels = {economico:'Económico',medio:'Nivel medio',premium:'Premium'};
   const hasPrice = pa.avg_entradas || pa.avg_platillos || pa.avg_postres;
   const pb = document.getElementById('priceBreakdown');
   if (pb && hasPrice) {
+    const tc = tierColors[pa.price_tier]||'#6B7280';
+    const tl = tierLabels[pa.price_tier]||pa.price_tier||'—';
     pb.style.display = 'block';
-    const tc = tierColors[pa.price_tier] || '#6B7280';
-    const tl = tierLabels[pa.price_tier] || pa.price_tier || '—';
     pb.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
         <div style="font-size:14px;font-weight:700">Análisis de precios <span style="font-size:11px;color:var(--text-m);font-weight:400">(sin bebidas)</span></div>
@@ -272,33 +284,32 @@ function renderAll(d) {
       </div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px">
         <div style="background:var(--gray-l);border-radius:var(--r-s);padding:12px;text-align:center">
-          <div style="font-size:20px;font-weight:700">${pa.avg_entradas ? '$'+Math.round(pa.avg_entradas) : '—'}</div>
+          <div style="font-size:20px;font-weight:700">${pa.avg_entradas?'$'+Math.round(pa.avg_entradas):'—'}</div>
           <div style="font-size:11px;color:var(--text-m);margin-top:2px">Prom. Entradas</div>
         </div>
         <div style="background:var(--red-l);border-radius:var(--r-s);padding:12px;text-align:center">
-          <div style="font-size:20px;font-weight:700;color:var(--red)">${pa.avg_platillos ? '$'+Math.round(pa.avg_platillos) : '—'}</div>
+          <div style="font-size:20px;font-weight:700;color:var(--red)">${pa.avg_platillos?'$'+Math.round(pa.avg_platillos):'—'}</div>
           <div style="font-size:11px;color:var(--text-m);margin-top:2px">Prom. Platillos</div>
         </div>
         <div style="background:var(--gray-l);border-radius:var(--r-s);padding:12px;text-align:center">
-          <div style="font-size:20px;font-weight:700">${pa.avg_postres ? '$'+Math.round(pa.avg_postres) : '—'}</div>
+          <div style="font-size:20px;font-weight:700">${pa.avg_postres?'$'+Math.round(pa.avg_postres):'—'}</div>
           <div style="font-size:11px;color:var(--text-m);margin-top:2px">Prom. Postres</div>
         </div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        ${pa.dominant_protein ? `<div style="background:var(--red-l);border-radius:var(--r-s);padding:5px 10px;font-size:12px"><span style="color:var(--text-m)">Proteína dominante:</span> <strong style="color:var(--red)">${pa.dominant_protein}</strong></div>` : ''}
-        ${pa.menu_diversity ? `<div style="background:var(--gray-l);border-radius:var(--r-s);padding:5px 10px;font-size:12px"><span style="color:var(--text-m)">Diversidad:</span> <strong>${pa.menu_diversity}/10</strong></div>` : ''}
+        ${pa.dominant_protein?`<div style="background:var(--red-l);border-radius:var(--r-s);padding:5px 10px;font-size:12px"><span style="color:var(--text-m)">Proteína dominante:</span> <strong style="color:var(--red)">${esc(pa.dominant_protein)}</strong></div>`:''}
+        ${pa.menu_diversity?`<div style="background:var(--gray-l);border-radius:var(--r-s);padding:5px 10px;font-size:12px"><span style="color:var(--text-m)">Diversidad:</span> <strong>${pa.menu_diversity}/10</strong></div>`:''}
       </div>`;
   }
 
-  // ── STAT CARDS ────────────────────────
-  const s = d.summary || {};
+  // ── STAT CARDS ──
   document.getElementById('sumCards').innerHTML = `
     <div class="sum-card"><div class="sum-num">${s.total_dishes||0}</div><div class="sum-label">Platillos</div></div>
     <div class="sum-card"><div class="sum-num">${s.sellable_ingredients||0}</div><div class="sum-label">Ingredientes vendibles</div></div>
     <div class="sum-card"><div class="sum-num" style="color:var(--green)">${s.exact_matches||0}</div><div class="sum-label">Matches exactos</div></div>
     <div class="sum-card"><div class="sum-num" style="color:#D97706">${s.approx_matches||0}</div><div class="sum-label">Aproximados</div></div>`;
 
-  // ── FINDINGS ─────────────────────────
+  // ── FINDINGS ──
   const findings = s.key_findings || [];
   if (findings.length) {
     document.getElementById('findingsBox').style.display = 'block';
@@ -306,231 +317,177 @@ function renderAll(d) {
       `<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;font-size:13px;color:#78350F">
         <span style="width:6px;height:6px;border-radius:50%;background:#D97706;margin-top:5px;flex-shrink:0;display:inline-block"></span>
         <span>${esc(f)}</span>
-      </div>`
-    ).join('');
+      </div>`).join('');
   }
 
-  // ── QUALITY NOTE ─────────────────────
-  const quality = s.menu_quality_note || '';
-  if (quality) {
+  // ── QUALITY NOTE ──
+  if (s.menu_quality_note) {
     document.getElementById('qualityBox').style.display = 'block';
-    document.getElementById('quality').textContent = quality;
+    document.getElementById('quality').textContent = s.menu_quality_note;
   }
 
-  // ── INGREDIENT CLOUD ─────────────────
-  const PRIO_COLORS = {
-    P1: { bg:'#FCEBEB', text:'#A32D2D' },
-    P2: { bg:'#FAEEDA', text:'#854F0B' },
-    P3: { bg:'#EAF3DE', text:'#3B6D11' },
-    P4: { bg:'#E6F1FB', text:'#185FA5' },
-    P5: { bg:'#F1EFE8', text:'#5F5E5A' }
-  };
-
+  // ── INGREDIENT CLOUD ──
   const matchTable = d.matching_table || [];
   const cloudEl = document.getElementById('ingredientCloud');
   if (cloudEl && matchTable.length) {
-    // Sort by priority then mentions
     const prioOrder = {P1:1,P2:2,P3:3,P4:4,P5:5};
     const sorted = [...matchTable].sort((a,b) => {
-      const pa = prioOrder[a.priority||'P5'] || 5;
-      const pb2 = prioOrder[b.priority||'P5'] || 5;
-      if (pa !== pb2) return pa - pb2;
-      return (b.mentions||1) - (a.mentions||1);
+      const pa2 = prioOrder[a.priority||'P5']||5;
+      const pb2 = prioOrder[b.priority||'P5']||5;
+      return pa2!==pb2 ? pa2-pb2 : (b.mentions||1)-(a.mentions||1);
     });
-
-    const maxMentions = Math.max(...sorted.map(r => r.mentions||1));
-
-    cloudEl.innerHTML = sorted.slice(0, 40).map(r => {
-      const prio = r.priority || 'P5';
-      const colors = PRIO_COLORS[prio] || PRIO_COLORS.P5;
-      const mentions = r.mentions || 1;
-      // Font size: base 11px, scale up by priority weight × mentions
-      const prioWeight = (6 - (prioOrder[prio]||5)) + 1; // P1=6, P5=2
-      const scale = (mentions / maxMentions) * 0.6 + 0.4; // 0.4 to 1.0
-      const fontSize = Math.round(10 + prioWeight * scale * 3);
-      const clampedSize = Math.min(Math.max(fontSize, 10), 26);
-      return `<span style="font-size:${clampedSize}px;background:${colors.bg};color:${colors.text};padding:3px 9px;border-radius:20px;font-weight:500;cursor:default" title="${prio} · ${mentions} menciones">${esc(r.ingredient_name||r.ingredient)}</span>`;
+    const maxM = Math.max(...sorted.map(r => r.mentions||1), 1);
+    cloudEl.innerHTML = sorted.slice(0,40).map(r => {
+      const prio = r.priority||'P5';
+      const col = PRIO_COLORS[prio]||PRIO_COLORS.P5;
+      const pw = (6-(prioOrder[prio]||5))+1;
+      const scale = (r.mentions||1)/maxM*0.6+0.4;
+      const fs = Math.min(Math.max(Math.round(10+pw*scale*3),10),26);
+      const name = esc(r.ingredient_name||r.ingredient||'');
+      return `<span style="font-size:${fs}px;background:${col.bg};color:${col.text};padding:3px 9px;border-radius:20px;font-weight:500;cursor:default" title="${prio} · ${r.mentions||1} menciones">${name}</span>`;
     }).join('');
   }
 
-  // ── MATCHING TABLE (Tab 1) ────────────
-  const confStyle = c => c === 'Alta' ? 'color:#16A34A;font-weight:500' : c === 'Media' ? 'color:#D97706;font-weight:500' : 'color:#C8102E';
-  document.getElementById('matchBody').innerHTML = (d.matching_table || []).map(r => {
-    const rawDishes = (r.dishes || r.dish_names || []).slice(0, 3).join(', ') || '—';
-    const dishes = esc(rawDishes);
-    const moreDishes = (r.dishes||r.dish_names||[]).length > 3 ? ` <span style="color:var(--text-m);font-size:10px">+${(r.dishes||r.dish_names||[]).length-3} más</span>` : '';
-    const alts = (r.alternatives || []).slice(0, 3).map(a =>
-      `<span style="display:inline-block;background:var(--gray-l);border:0.5px solid var(--border);border-radius:4px;padding:1px 5px;font-size:10px;margin:1px;color:var(--text-m)" title="${a.material||''}">${a.sku||a}</span>`
+  // ── MATCHING TABLE (Tab 1) ──
+  document.getElementById('matchBody').innerHTML = matchTable.map(r => {
+    const dishes = esc((r.dishes||r.dish_names||[]).slice(0,3).join(', ')||'—');
+    const more = (r.dishes||r.dish_names||[]).length>3 ? ` <span style="color:var(--text-m);font-size:10px">+${(r.dishes||r.dish_names||[]).length-3} más</span>` : '';
+    const alts = (r.alternatives||[]).slice(0,3).map(a =>
+      `<span style="display:inline-block;background:var(--gray-l);border:0.5px solid var(--border);border-radius:4px;padding:1px 5px;font-size:10px;margin:1px;color:var(--text-m)" title="${esc(a.material||a||'')}">${esc(a.sku||a||'')}</span>`
     ).join('');
-    const isGap = !r.sku || r.match_type === 'No encontrado';
-    return `<tr ${isGap ? 'style="background:#FFF9F9"' : ''}>
-      <td><strong>${esc(r.ingredient_name||r.ingredient||'—')}</strong><br><span class="badge" style="background:${PRIO_COLORS[r.priority||'P5'].bg};color:${PRIO_COLORS[r.priority||'P5'].text};font-size:9px;padding:1px 5px">${r.priority||'P5'}</span></td>
-      <td style="font-size:12px;color:var(--text-m);max-width:200px">${dishes}${moreDishes}</td>
-      <td>${isGap ? '<span style="color:var(--text-l);font-size:12px">Sin match</span>' : `<div style="font-size:12px;font-weight:600">${esc(r.material||'—')}</div><div style="font-size:10px;color:var(--text-m)">${esc(r.sku||'')} · ${esc(r.brand||r.marca||''  )}</div>`}</td>
-      <td style="${confStyle(r.confidence||r.confianza)}">${r.confidence||r.confianza||'—'}</td>
-      <td><span class="badge" style="background:${PRIO_COLORS[r.priority||'P5'].bg};color:${PRIO_COLORS[r.priority||'P5'].text};font-size:9px">${r.priority||'—'}</span></td>
-      <td>${alts || '<span style="color:var(--text-l);font-size:11px">—</span>'}</td>
+    const isGap = !r.sku || r.match_type==='No encontrado';
+    const pCol = PRIO_COLORS[r.priority||'P5']||PRIO_COLORS.P5;
+    const confStyle = r.confidence==='Alta'||r.confianza==='Alta'?'color:#16A34A;font-weight:500':r.confidence==='Media'||r.confianza==='Media'?'color:#D97706;font-weight:500':'color:#C8102E';
+    return `<tr ${isGap?'style="background:#FFF9F9"':''}>
+      <td><strong>${esc(r.ingredient_name||r.ingredient||'—')}</strong><br>
+        <span class="badge" style="background:${pCol.bg};color:${pCol.text};font-size:9px;padding:1px 5px">${r.priority||'P5'}</span></td>
+      <td style="font-size:12px;color:var(--text-m);max-width:200px">${dishes}${more}</td>
+      <td>${isGap?'<span style="color:var(--text-l);font-size:12px">Sin match</span>':`<div style="font-size:12px;font-weight:600">${esc(r.material||'—')}</div><div style="font-size:10px;color:var(--text-m)">${esc(r.sku||'')} · ${esc(r.brand||r.marca||'')}</div>`}</td>
+      <td style="${confStyle}">${r.confidence||r.confianza||'—'}</td>
+      <td><span class="badge" style="background:${pCol.bg};color:${pCol.text};font-size:9px">${r.priority||'—'}</span></td>
+      <td>${alts||'<span style="color:var(--text-l);font-size:11px">—</span>'}</td>
     </tr>`;
-  }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-l);padding:20px">Sin datos de matching</td></tr>';
+  }).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--text-l);padding:20px">Sin datos de matching</td></tr>';
 
-  // Show gaps in matching tab
-  const gaps = d.gaps || [];
+  // ── GAPS ──
+  const gaps = d.gaps||[];
   const gapsCard = document.getElementById('gapsCard');
   if (gapsCard && gaps.length) {
     gapsCard.style.display = 'block';
     document.getElementById('gaps').innerHTML = gaps.map(g =>
-      `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
-        <span style="color:#D97706">⚠</span><span>${esc(g)}</span>
-      </div>`
+      `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:#D97706">⚠</span><span>${esc(g)}</span></div>`
     ).join('');
   }
 
-  // ── SKU TABLE (Tab 2) with filters ────
-  const PRIO_ORDER = {P1:1,P2:2,P3:3,P4:4,P5:5};
-  let _skuData = [...(d.sku_table || [])].sort((a,b) =>
-    (PRIO_ORDER[a.priority||'P5']||5) - (PRIO_ORDER[b.priority||'P5']||5) ||
-    (b.mentions||0) - (a.mentions||0)
-  );
+  // ── SKU TABLE (Tab 2) ──
+  const prioOrder2 = {P1:1,P2:2,P3:3,P4:4,P5:5};
+  let skuData = [...(d.sku_table||[])].sort((a,b) =>
+    (prioOrder2[a.priority||'P5']||5)-(prioOrder2[b.priority||'P5']||5)||
+    (b.mentions||0)-(a.mentions||0));
 
-  // Populate filter dropdowns
-  const families = [...new Set(_skuData.map(r => r.familia||r.family||'').filter(Boolean))].sort();
-  const marcas   = [...new Set(_skuData.map(r => r.brand||r.marca||'').filter(Boolean))].sort();
-  const lineas   = [...new Set(_skuData.map(r => r.linea||r.linea_ventas||'').filter(Boolean))].sort();
-  const subs     = [...new Set(_skuData.map(r => r.sublinea||'').filter(Boolean))].sort();
-
-  const fillSel = (id, opts) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const first = el.options[0].text;
-    el.innerHTML = `<option value="">${first}</option>` + opts.map(o => `<option value="${o}">${o}</option>`).join('');
-  };
-  fillSel('skuFilterFam', families);
-  fillSel('skuFilterMarca', marcas);
-  fillSel('skuFilterLinea', lineas);
-  fillSel('skuFilterSub', subs);
+  // Populate filters
+  function fillSel(id, opts) {
+    const el = document.getElementById(id); if(!el) return;
+    const first = el.options[0]?.text||'Todos';
+    el.innerHTML = `<option value="">${first}</option>`+opts.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join('');
+  }
+  fillSel('skuFilterFam',  [...new Set(skuData.map(r=>r.familia||r.family||'').filter(Boolean))].sort());
+  fillSel('skuFilterMarca',[...new Set(skuData.map(r=>r.brand||r.marca||'').filter(Boolean))].sort());
+  fillSel('skuFilterLinea',[...new Set(skuData.map(r=>r.linea||r.linea_ventas||'').filter(Boolean))].sort());
+  fillSel('skuFilterSub',  [...new Set(skuData.map(r=>r.sublinea||'').filter(Boolean))].sort());
 
   function renderSkuTable(data) {
     let prevPrio = null;
-    document.getElementById('skuBody').innerHTML = data.map((r, i) => {
-      const prio = r.priority || 'P5';
-      const colors = PRIO_COLORS[prio] || PRIO_COLORS.P5;
-      let header = '';
-      if (prio !== prevPrio) {
-        prevPrio = prio;
-        const labels = {P1:'Proteínas premium',P2:'Proteínas generales',P3:'Carnes frías y embutidos',P4:'Lácteos y quesos',P5:'Abarrotes y resto'};
-        header = `<tr><td colspan="8" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-m);padding:12px 10px 6px;border-top:1px solid var(--border);background:var(--gray-l)">${labels[prio]||prio}</td></tr>`;
+    const labels = {P1:'Proteínas premium',P2:'Proteínas generales',P3:'Carnes frías y embutidos',P4:'Lácteos y quesos',P5:'Abarrotes y resto'};
+    document.getElementById('skuBody').innerHTML = data.map((r,i) => {
+      const prio = r.priority||'P5';
+      const col = PRIO_COLORS[prio]||PRIO_COLORS.P5;
+      let hdr = '';
+      if (prio!==prevPrio) {
+        prevPrio=prio;
+        hdr=`<tr><td colspan="8" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-m);padding:12px 10px 6px;border-top:1px solid var(--border);background:var(--gray-l)">${labels[prio]||prio}</td></tr>`;
       }
-      return header + `<tr>
+      return hdr+`<tr>
         <td style="color:var(--text-m)">${i+1}</td>
         <td style="font-family:monospace;font-size:11px">${esc(r.sku||'—')}</td>
         <td style="font-size:12px;font-weight:500">${esc(r.material||'—')}</td>
         <td>${esc(r.brand||r.marca||'—')}</td>
         <td><span style="font-size:10px;background:var(--gray-l);padding:1px 5px;border-radius:3px">${esc(r.familia||r.family||'—')}</span></td>
         <td style="font-size:11px;color:var(--text-m)">${esc(r.sublinea||'—')}</td>
-        <td><span class="badge" style="background:${colors.bg};color:${colors.text};font-size:9px">${prio}</span></td>
+        <td><span class="badge" style="background:${col.bg};color:${col.text};font-size:9px">${prio}</span></td>
         <td style="text-align:center;font-weight:600">${r.mentions||0}</td>
       </tr>`;
-    }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text-l);padding:20px">Sin datos</td></tr>';
+    }).join('')||'<tr><td colspan="8" style="text-align:center;color:var(--text-l);padding:20px">Sin datos</td></tr>';
   }
 
-  renderSkuTable(_skuData);
+  renderSkuTable(skuData);
 
   window.filterSkuTable = function() {
-    const fam   = document.getElementById('skuFilterFam')?.value || '';
-    const marca = document.getElementById('skuFilterMarca')?.value || '';
-    const linea = document.getElementById('skuFilterLinea')?.value || '';
-    const sub   = document.getElementById('skuFilterSub')?.value || '';
-    const filtered = _skuData.filter(r =>
-      (!fam   || (r.familia||r.family||'') === fam) &&
-      (!marca || (r.brand||r.marca||'') === marca) &&
-      (!linea || (r.linea||r.linea_ventas||'') === linea) &&
-      (!sub   || (r.sublinea||'') === sub)
-    );
-    renderSkuTable(filtered);
+    const fam   = document.getElementById('skuFilterFam')?.value||'';
+    const marca = document.getElementById('skuFilterMarca')?.value||'';
+    const linea = document.getElementById('skuFilterLinea')?.value||'';
+    const sub   = document.getElementById('skuFilterSub')?.value||'';
+    renderSkuTable(skuData.filter(r=>
+      (!fam||(r.familia||r.family||'')===fam)&&
+      (!marca||(r.brand||r.marca||'')===marca)&&
+      (!linea||(r.linea||r.linea_ventas||'')===linea)&&
+      (!sub||(r.sublinea||'')===sub)
+    ));
   };
-
   window.clearSkuFilters = function() {
-    ['skuFilterFam','skuFilterMarca','skuFilterLinea','skuFilterSub'].forEach(id => {
-      const el = document.getElementById(id); if(el) el.value = '';
+    ['skuFilterFam','skuFilterMarca','skuFilterLinea','skuFilterSub'].forEach(id=>{
+      const el=document.getElementById(id); if(el) el.value='';
     });
-    renderSkuTable(_skuData);
+    renderSkuTable(skuData);
   };
-
-function switchTab(idx) {
-  [0, 1, 2, 3].forEach(i => {
-    document.getElementById('tab' + i).style.display = i === idx ? 'block' : 'none';
-  });
-  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', i === idx));
 }
 
-function doExport()   { exportExcel(_data); }
-function doWhatsapp() { shareWhatsapp(_data); }
-
-// ── DEBUG ──────────────────────────────
-function toggleDebugPanel() {
-  const panel = document.getElementById('debugPanel');
-  if (!panel) return;
-  if (panel.style.display === 'none') {
-    loadDebugLog();
-    panel.style.display = 'block';
-  } else {
-    panel.style.display = 'none';
-  }
-}
-
-function loadDebugLog() {
-  const panel = document.getElementById('debugPanel');
-  if (!panel) return;
-  try {
-    const logs = JSON.parse(sessionStorage.getItem('ml_debug_log') || '[]');
-    if (!logs.length) {
-      panel.innerHTML = '<div style="color:#888">Sin logs disponibles</div>';
-      return;
-    }
-    const colors = { info: '#00ff88', warn: '#ffcc00', error: '#ff4444' };
-    panel.innerHTML = '<div style="color:#888;margin-bottom:6px;font-size:10px">── Log de análisis ──</div>' +
-      logs.map(l => `<div style="color:${colors[l.type]||'#00ff88'}">[${l.ts}] ► ${l.msg}</div>`).join('');
-    panel.scrollTop = panel.scrollHeight;
-  } catch(e) {
-    panel.innerHTML = '<div style="color:#ff4444">Error al cargar logs</div>';
-  }
-}
+// ── ACTIONS ──────────────────────────
+function doExport()   { if(_data) exportExcel(_data); }
+function doWhatsapp() { if(_data) shareWhatsapp(_data); }
 
 async function doDelete() {
   const name = _data?.restaurant_name || _data?.bizName || 'este análisis';
-  if (!confirm(`¿Eliminar el análisis de "${name}"?\n\nEsta acción no se puede deshacer.`)) return;
-
+  if (!confirm('¿Eliminar el análisis de "' + name + '"?\n\nEsta acción no se puede deshacer.')) return;
   const params = new URLSearchParams(window.location.search);
   const analysisId = params.get('id');
-
   if (!analysisId) {
-    // Only in session — just clear and redirect
     sessionStorage.removeItem('ml_current_analysis');
-    toast('✅ Análisis eliminado', 'success');
-    setTimeout(() => window.location.href = 'history.html', 1000);
+    window.location.href = 'history.html';
     return;
   }
-
-  const sb = getSupabase();
-  if (!sb) {
-    sessionStorage.removeItem('ml_current_analysis');
-    toast('✅ Análisis eliminado', 'success');
-    setTimeout(() => window.location.href = 'history.html', 1000);
-    return;
-  }
-
+  const sb = await getSupabaseAsync();
+  if (!sb) { sessionStorage.removeItem('ml_current_analysis'); window.location.href = 'history.html'; return; }
   showLoading('Eliminando…', '');
   try {
-    await sb.from('ingredients').delete().eq('analysis_id', analysisId);
-    await sb.from('sku_matches').delete().eq('analysis_id', analysisId);
-    await sb.from('menu_items').delete().eq('analysis_id', analysisId);
-    await sb.from('analyses').delete().eq('id', analysisId);
+    for (const tbl of ['ingredients','sku_matches','menu_items']) {
+      await sb.from(tbl).delete().eq('analysis_id', analysisId);
+    }
+    const { error } = await sb.from('analyses').delete().eq('id', analysisId);
+    if (error) throw new Error(error.message);
     hideLoading();
     toast('✅ Análisis eliminado', 'success');
-    setTimeout(() => window.location.href = 'history.html', 1000);
+    setTimeout(() => window.location.href = 'history.html', 800);
   } catch(e) {
     hideLoading();
     toast('Error: ' + e.message, 'error');
+  }
+}
+
+// ── DEBUG ─────────────────────────────
+function toggleDebugPanel() {
+  const panel = document.getElementById('debugPanel');
+  if (!panel) return;
+  if (panel.style.display === 'none' || !panel.style.display) {
+    try {
+      const logs = JSON.parse(sessionStorage.getItem('ml_debug_log')||'[]');
+      const colors = {info:'#00ff88',warn:'#ffcc00',error:'#ff4444'};
+      panel.innerHTML = '<div style="color:#888;margin-bottom:6px;font-size:10px">── Log de análisis ──</div>' +
+        (logs.length ? logs.map(l=>`<div style="color:${colors[l.type]||'#00ff88'}">[${l.ts}] ► ${l.msg}</div>`).join('') : '<div style="color:#888">Sin logs</div>');
+    } catch(e) {}
+    panel.style.display = 'block';
+  } else {
+    panel.style.display = 'none';
   }
 }
 </script>
