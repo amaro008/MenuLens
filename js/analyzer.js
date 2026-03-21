@@ -310,6 +310,15 @@ Dentro de la familia, elegir el producto más lógico según nombre y precio del
 PASO 3 — REPORTAR:
 - Match por Sublínea → Confianza Alta
 - Match por Material → Confianza Media
+RECOMENDACIONES — OBLIGATORIO SIEMPRE 5 PUNTOS:
+Genera exactamente 5 recomendaciones estratégicas para el asesor de ventas:
+1. (type:"producto") Ingrediente/línea principal: mayor volumen, producto específico a ofrecer
+2. (type:"pitch") Tier del restaurante: qué línea recomendar (premium vs estándar) basado en precios
+3. (type:"pitch") Táctica de entrada: cómo iniciar la conversación, qué producto usar como gancho
+4. (type:"oportunidad") Gap o área de oportunidad: algo que usan pero podría mejorarse o ampliarse
+5. (type:"oportunidad") Potencial de la cuenta: volumen estimado mensual, productos ancla, frecuencia
+Cada punto: title (título corto 4-6 palabras), body (2-3 oraciones concretas y accionables), type
+
 ALTERNATIVAS — OBLIGATORIO SIEMPRE:
 - TODOS los ingredientes deben tener al menos 2 alternativas en el array alternatives
 - Alternativas = otros SKUs de la MISMA sublínea o familia que podrían sustituir al principal
@@ -317,6 +326,12 @@ ALTERNATIVAS — OBLIGATORIO SIEMPRE:
 - Ejemplo camarón: alternatives = [{sku:"70070094", material:"CAMARON COLOSAL U12"}, {sku:"70070123", material:"CAMARON 16-20 SIN CABEZA"}]
 - Si solo hay 1 SKU en la sublínea, busca en sublíneas similares de la misma familia
 - NUNCA dejar alternatives: [] vacío si hay más de 1 producto en el catálogo para esa familia
+
+CAMPO dishes EN matching_table — OBLIGATORIO:
+- Para CADA ingrediente en matching_table, listar los platillos del menú donde aparece
+- Ejemplo: ingrediente "ribeye" → dishes: ["Bife Ancho (Rib-eye) 460gr.", "Parrillada Premium"]
+- Máximo 5 platillos por ingrediente
+- NUNCA dejar dishes: [] vacío — siempre hay al menos 1 platillo donde aparece
 
 ORDEN DEL ARRAY matching_table — OBLIGATORIO:
 - Ordenar TODO el array matching_table de mayor a menor prioridad comercial
@@ -357,12 +372,15 @@ CERO texto antes o después. CERO bloques de código. CERO explicaciones. SOLO e
   "dishes": [{"name":"","category":"","category_type":"entrada|platillo|postre|bebida|otro","price":"","price_num":0,"description":"","ingredients":[{"name":"","implicit":false,"ambiguous":false}],"protein_type":"","cooking_method":"","is_premium":false}],
   "sku_table": [{"rank":1,"sku":"","material":"","brand":"","type":"","priority":"P1","mentions":0}],
   "matching_table": [{
-    "ingredient":"","sku":"","material":"","brand":"","family":"","sales_line":"",
-    "match_type":"Exacto","confidence":"Alta","confidence_reason":"",
-    "priority":"P1","alternatives":[{"sku":"","material":""}]
+    "ingredient":"","sku":"","material":"","brand":"","familia":"","sublinea":"",
+    "match_type":"Exacto","confidence":"Alta",
+    "priority":"P1",
+    "dishes":["nombre del platillo donde aparece"],
+    "mentions":1,
+    "alternatives":[{"sku":"","material":""}]
   }],
-  "gaps": ["ingredientes frecuentes no cubiertos por el catálogo"],
-  "avg_price": 0
+  "avg_price": 0,
+  "recommendations":[{"title":"","body":"","type":"pitch"}]
 }`;
 }
 
