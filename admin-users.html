@@ -169,7 +169,7 @@ function renderUsers(list) {
         <div style="font-size:11px;color:var(--text-m)">${u.email}</div>
       </div>
       <span class="badge ${roleMap[u.role]||'badge-gray'}">${roleLabel[u.role]||u.role}</span>
-      <button class="btn btn-ghost btn-xs" onclick="editUser('${u.id}','${u.name}','${u.email}','${u.role}')">Editar</button>
+      <button class="btn btn-ghost btn-xs" onclick="editUser('${u.id}','${u.name}','${u.email}','${u.role}','${u.advisor_code||''}','${u.office_id||''}')">Editar</button>
     </div>`).join('') || '<div style="color:var(--text-l);font-size:13px;padding:12px 0">Sin usuarios</div>';
 }
 
@@ -186,22 +186,31 @@ async function loadOfficesIntoSelect(selectId) {
 }
 
 function openUserModal() {
+  _editingUserId = null;
   document.getElementById('modalTitle').textContent = 'Agregar usuario';
   document.getElementById('uName').value = '';
   document.getElementById('uEmail').value = '';
   document.getElementById('uPassword').value = '';
   document.getElementById('uRole').value = 'advisor';
+  if (document.getElementById('uAdvisorCode')) document.getElementById('uAdvisorCode').value = '';
   openModal('modalUser');
   loadOfficesIntoSelect('uOffice');
 }
 
-function editUser(id, name, email, role) {
+let _editingUserId = null;
+
+function editUser(id, name, email, role, advisorCode, officeId) {
+  _editingUserId = id;
   document.getElementById('modalTitle').textContent = 'Editar usuario';
-  document.getElementById('uName').value = name;
-  document.getElementById('uEmail').value = email;
+  document.getElementById('uName').value = name || '';
+  document.getElementById('uEmail').value = email || '';
   document.getElementById('uPassword').value = '';
-  document.getElementById('uRole').value = role;
+  document.getElementById('uRole').value = role || 'advisor';
+  document.getElementById('uAdvisorCode').value = advisorCode || '';
   openModal('modalUser');
+  loadOfficesIntoSelect('uOffice').then(() => {
+    if (officeId) document.getElementById('uOffice').value = officeId;
+  });
 }
 
 async function saveUser() {
@@ -210,29 +219,61 @@ async function saveUser() {
   const pwd   = document.getElementById('uPassword').value;
   const role  = document.getElementById('uRole').value;
   if (!name || !email) { toast('Nombre y correo son requeridos', 'error'); return; }
-  if (!pwd || pwd.length < 8) { toast('La contraseña debe tener mínimo 8 caracteres', 'error'); return; }
 
-  showLoading('Creando usuario…', '');
+  // Password only required for new users
+  if (!_editingUserId && (!pwd || pwd.length < 8)) {
+    toast('La contraseña debe tener mínimo 8 caracteres', 'error'); return;
+  }
 
-  try {
-    const advisorCode = document.getElementById('uAdvisorCode').value.trim();
+  const advisorCode = document.getElementById('uAdvisorCode')?.value.trim() || '';
+  const officeId    = document.getElementById('uOffice')?.value || null;
 
-    // Get JWT — service key never leaves the server
-    const sb = await getSupabaseAsync();
-    const { data: { session } } = await sb.auth.getSession();
-    if (!session?.access_token) {
+  const sb = await getSupabaseAsync();
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session?.access_token) {
+    toast('Sesión expirada. Vuelve a iniciar sesión.', 'error'); return;
+  }
+
+  if (_editingUserId) {
+    // ── UPDATE existing user ──
+    showLoading('Actualizando usuario…', '');
+    try {
+      // Update profile in public.users
+      const { error } = await sb.from('users').update({
+        name, role,
+        advisor_code: advisorCode || null,
+        office_id:    officeId || null
+      }).eq('id', _editingUserId);
+
+      if (error) throw new Error(error.message);
+
+      // Update password if provided
+      if (pwd && pwd.length >= 8) {
+        await fetch('/api/create-user', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+          body: JSON.stringify({ user_id: _editingUserId, password: pwd })
+        });
+      }
+
       hideLoading();
-      toast('Sesión expirada. Vuelve a iniciar sesión.', 'error');
-      return;
+      closeModal('modalUser');
+      toast('✅ Usuario actualizado', 'success');
+      loadUsers();
+    } catch(e) {
+      hideLoading();
+      toast('Error: ' + e.message, 'error');
     }
+    return;
+  }
 
+  // ── CREATE new user ──
+  showLoading('Creando usuario…', '');
+  try {
     const resp = await fetch('/api/create-user', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`
-      },
-      body: JSON.stringify({ email, password: pwd, name, role, advisor_code: advisorCode, office_id: document.getElementById('uOffice')?.value || null })
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      body: JSON.stringify({ email, password: pwd, name, role, advisor_code: advisorCode, office_id: officeId })
     });
 
     const result = await resp.json();

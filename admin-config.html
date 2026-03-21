@@ -265,6 +265,16 @@
   loadOffices();
 })();
 
+// ── MODAL HELPERS (in case ui.js not loaded) ─────────
+function openModal(id)  {
+  const el = document.getElementById(id);
+  if (el) { el.style.display = 'flex'; el.classList.add('open'); }
+}
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) { el.style.display = 'none'; el.classList.remove('open'); }
+}
+
 // ── SHARED UTILITY ───────────────────────
 async function loadOfficesIntoSelect(selectId) {
   try {
@@ -312,7 +322,9 @@ function openOfficeModal(id = null, name = '', code = '') {
   document.getElementById('officeModalTitle').textContent = id ? 'Editar sucursal' : 'Nueva sucursal';
   document.getElementById('officeName').value = name;
   document.getElementById('officeCode').value = code;
-  document.getElementById('modalOffice').style.display = 'flex';
+  // Show modal — works with both class-based and style-based
+  const m = document.getElementById('modalOffice');
+  if (m) { m.style.display = 'flex'; m.classList.add('open'); }
 }
 
 async function saveOffice() {
