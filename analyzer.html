@@ -249,7 +249,9 @@ async function startAnalysis() {
   }
 
   const startTime = Date.now();
-  showLoading('Analizando menú con IA…', 'Claude está leyendo el menú…');
+  const activeModel = localStorage.getItem('ml_active_model') || 'claude-sonnet-4-6';
+  const modelLabel = activeModel.startsWith('gemini') ? 'Gemini' : activeModel.includes('haiku') ? 'Claude Haiku' : 'Claude Sonnet';
+  showLoading('Analizando menú con IA…', `${modelLabel} está leyendo el menú…`);
 
   try {
     const result = await callClaudeAnalysis(_fileBase64, _fileType, bizName, bizCity);
@@ -262,6 +264,7 @@ async function startAnalysis() {
       duration: Date.now() - startTime,
       timestamp: new Date().toISOString(),
       userName: _user?.name || '',
+      model_used: activeModel,
     };
 
     // Save to DB

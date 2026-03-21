@@ -38,6 +38,7 @@
               <div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap">
                 <span class="badge badge-yellow" id="resFoodType">—</span>
                 <span class="badge badge-blue" id="resClientNum" style="display:none"></span>
+                <span class="badge" id="resModelBadge" style="display:none;font-size:10px;padding:2px 7px;border-radius:10px"></span>
               </div>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -267,6 +268,16 @@ function renderAll(d) {
     const cn = document.getElementById('resClientNum');
     if (cn) { cn.textContent = 'Cliente #' + d.bizClientNum; cn.style.display = 'inline-flex'; }
   }
+  // Show model used
+  if (d.model_used) {
+    const isGemini = d.model_used.startsWith('gemini');
+    const isHaiku  = d.model_used.includes('haiku');
+    const label = isGemini ? '✦ Gemini' : isHaiku ? '◆ Haiku' : '◆ Sonnet';
+    const bg    = isGemini ? '#DBEAFE' : '#F3F4F6';
+    const color = isGemini ? '#1E40AF' : '#374151';
+    const el = document.getElementById('resModelBadge');
+    if (el) { el.textContent = label; el.style.background = bg; el.style.color = color; el.style.display = 'inline-flex'; }
+  }
 
   // ── PRICE ANALYSIS ──
   const pa = d.price_analysis || {};
@@ -350,6 +361,15 @@ function renderAll(d) {
       const name = esc(r.ingredient_name||r.ingredient||'');
       return `<span style="font-size:${fs}px;background:${col.bg};color:${col.text};padding:3px 9px;border-radius:20px;font-weight:500;cursor:default" title="${prio} · ${r.mentions||1} menciones">${name}</span>`;
     }).join('');
+  }
+
+  // ── SORT matching_table by priority (client-side fallback) ──
+  const PRIO = {P1:1,P2:2,P3:3,P4:4,P5:5};
+  if (Array.isArray(d.matching_table)) {
+    d.matching_table.sort((a,b) =>
+      (PRIO[a.priority||'P5']||5) - (PRIO[b.priority||'P5']||5) ||
+      (b.mentions||0) - (a.mentions||0)
+    );
   }
 
   // ── MATCHING TABLE (Tab 1) ──
