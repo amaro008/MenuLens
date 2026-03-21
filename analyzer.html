@@ -52,7 +52,7 @@
               <div id="uploadZone" class="upload-zone" onclick="triggerFileInput()">
                 <div class="upload-icon">📄</div>
                 <div class="upload-title">Haz clic aquí para subir</div>
-                <div class="upload-sub">PDF o imágenes · múltiples archivos · máx 4MB c/u</div>
+                <div class="upload-sub">PDF o imágenes · múltiples archivos · máx 15MB c/u</div>
                 <div class="upload-types">
                   <span class="type-tag">PDF</span>
                   <span class="type-tag">JPG</span>
@@ -62,7 +62,7 @@
               </div>
 
               <!-- File input — hidden, triggered by click on zone -->
-              <input type="file" id="fileInput" accept=".pdf,image/*" multiple
+              <input type="file" id="fileInput" accept="image/*,image/heic,image/heif,application/pdf" multiple
                 style="display:none" onchange="handleFiles(this.files)">
 
               <!-- File list -->
@@ -121,10 +121,10 @@ function triggerFileInput() {
 
 function handleFiles(fileList) {
   if (!fileList || !fileList.length) return;
-  const MAX = 4 * 1024 * 1024;
+  const MAX = 15 * 1024 * 1024;
   Array.from(fileList).forEach(file => {
     if (file.size > MAX) {
-      toast(file.name + ' supera 4MB — omitido', 'error');
+      toast(file.name + ' supera 15MB — omitido', 'error');
       return;
     }
     const reader = new FileReader();
@@ -296,11 +296,31 @@ async function startAnalysis() {
     if (content) content.insertBefore(banner, content.children[2]);
   }
 
-  loadCatalogFromStorage();
-  if (!catalogData.length) {
-    document.getElementById('catalogWarning').style.display = 'block';
-  }
+  // Check catalog from Supabase — show warning only if genuinely empty
+  loadCatalogFromStorage(); // load localStorage cache while Supabase loads
+  checkCatalogStatus();
 })();
+
+async function checkCatalogStatus() {
+  // First try localStorage cache (instant)
+  if (catalogData.length > 0) {
+    document.getElementById('catalogWarning').style.display = 'none';
+    return;
+  }
+  // Then check Supabase
+  try {
+    const resp = await fetch('/api/catalog');
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.total > 0) {
+        document.getElementById('catalogWarning').style.display = 'none';
+        return;
+      }
+    }
+  } catch(e) { /* silent */ }
+  // Only show warning if both checks fail
+  document.getElementById('catalogWarning').style.display = 'block';
+}
 </script>
 </body>
 </html>
