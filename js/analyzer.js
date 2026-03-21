@@ -310,9 +310,6 @@ Dentro de la familia, elegir el producto más lógico según nombre y precio del
 PASO 3 — REPORTAR:
 - Match por Sublínea → Confianza Alta
 - Match por Material → Confianza Media
-- GAP solo si genuinamente no hay nada en el catálogo
-- NUNCA gap para: arrachera, t-bone, cowboy, short rib, ribeye, camarón, pulpo, langosta, alitas, chorizo
-
 ALTERNATIVAS — OBLIGATORIO SIEMPRE:
 - TODOS los ingredientes deben tener al menos 2 alternativas en el array alternatives
 - Alternativas = otros SKUs de la MISMA sublínea o familia que podrían sustituir al principal
