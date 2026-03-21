@@ -31,18 +31,18 @@
             <a href="analyzer.html" class="btn btn-primary">+ Nuevo análisis</a>
           </div>
 
+          <!-- STATS -->
           <div class="stats-grid">
             <div class="stat-card"><div class="stat-num" id="st1">—</div><div class="stat-label">Análisis este mes</div></div>
-            <div class="stat-card"><div class="stat-num" id="st2">—</div><div class="stat-label">Restaurantes</div></div>
+            <div class="stat-card"><div class="stat-num" id="st2">—</div><div class="stat-label">Restaurantes únicos</div></div>
             <div class="stat-card"><div class="stat-num" id="st3">—</div><div class="stat-label">SKUs recomendados</div></div>
             <div class="stat-card"><div class="stat-num" id="st4" style="font-size:16px;padding-top:4px">—</div><div class="stat-label">Tipo más analizado</div></div>
           </div>
 
+          <!-- QUICK ACCESS -->
           <div class="card">
             <div class="card-body">
-              <div class="card-header">
-                <div class="card-title">⚡ Acceso rápido</div>
-              </div>
+              <div class="card-title">⚡ Acceso rápido</div>
               <div style="display:flex;gap:10px;flex-wrap:wrap">
                 <a href="analyzer.html" class="btn btn-primary">+ Nuevo análisis</a>
                 <a href="history.html"  class="btn btn-outline">Ver historial</a>
@@ -50,21 +50,40 @@
             </div>
           </div>
 
+          <!-- RECENT ANALYSES -->
           <div class="card">
             <div class="card-body">
               <div class="card-header">
                 <div class="card-title">📋 Últimos análisis</div>
                 <a href="history.html" class="btn btn-outline btn-sm">Ver todos</a>
               </div>
+
+              <!-- SEARCH BAR -->
+              <div style="margin-bottom:12px;position:relative">
+                <input class="form-input" id="dashSearch" placeholder="🔍 Buscar restaurante..."
+                  oninput="filterRecent(this.value)"
+                  style="padding-left:14px;font-size:13px">
+              </div>
+
               <div class="table-wrap">
                 <table>
                   <thead>
-                    <tr><th>Restaurante</th><th>Tipo</th><th>Fecha</th><th>SKUs</th><th>Estado</th><th></th></tr>
+                    <tr>
+                      <th>Restaurante</th>
+                      <th>Tipo</th>
+                      <th>Precio prom.</th>
+                      <th>Fecha</th>
+                      <th>SKUs</th>
+                      <th></th>
+                    </tr>
                   </thead>
                   <tbody id="recentTable">
                     <tr><td colspan="6" style="text-align:center;color:var(--text-l);padding:24px">Sin análisis aún</td></tr>
                   </tbody>
                 </table>
+              </div>
+              <div id="noResults" style="display:none;text-align:center;color:var(--text-l);font-size:13px;padding:16px">
+                Sin resultados para tu búsqueda
               </div>
             </div>
           </div>
@@ -78,30 +97,29 @@
 <script src="js/auth.js"></script>
 <script src="js/ui.js"></script>
 <script>
+let _allRecent = [];
+
 (async () => {
   const user = await requireAuth();
   if (!user) return;
   renderTopbar(user, false);
   renderSidebar(currentPage, user.role);
-  document.getElementById('welcomeMsg').textContent = `Bienvenido, ${user.name.split(' ')[0]} 👋`;
+  document.getElementById('welcomeMsg').textContent = `Bienvenido, ${user.name?.split(' ')[0] || user.email} 👋`;
   await loadDashboard(user);
 })();
 
 async function loadDashboard(user) {
   const sb = getSupabase();
   if (!sb) {
+    // Demo mode
     document.getElementById('st1').textContent = '5';
     document.getElementById('st2').textContent = '4';
     document.getElementById('st3').textContent = '48';
-    document.getElementById('st4').textContent = 'Mexicana';
-    document.getElementById('recentTable').innerHTML = `
-      <tr>
-        <td><div class="td-main">La Trattoria del Centro</div><div class="td-sub">Roma Norte, CDMX</div></td>
-        <td><span class="badge badge-yellow">Italiana</span></td>
-        <td>Hoy</td><td>14</td>
-        <td><span class="badge badge-green">Completo</span></td>
-        <td><a href="results.html" class="btn btn-outline btn-xs">Ver</a></td>
-      </tr>`;
+    document.getElementById('st4').textContent = 'Internacional';
+    renderRecentRows([
+      { id:'1', restaurants:{name:'Holsteins',food_type:'Internacional'}, created_at:new Date().toISOString(), sku_count:22, status:'complete', avg_price_platillos:320 },
+      { id:'2', restaurants:{name:'Pepe Gaucho',food_type:'Internacional'}, created_at:new Date().toISOString(), sku_count:18, status:'complete', avg_price_platillos:280 },
+    ]);
     return;
   }
 
@@ -109,33 +127,66 @@ async function loadDashboard(user) {
   since.setDate(1);
 
   const { data } = await sb.from('analyses')
-    .select('id, created_at, status, sku_count, restaurants(name, city, food_type)')
+    .select('id, created_at, status, sku_count, restaurant_id, avg_price_platillos, price_tier, restaurants(name, food_type)')
     .eq('user_id', user.id)
     .gte('created_at', since.toISOString())
     .order('created_at', { ascending: false })
-    .limit(10);
+    .limit(50);
 
   if (!data) return;
+
+  // Stats
   document.getElementById('st1').textContent = data.length;
-  document.getElementById('st2').textContent = new Set(data.map(a => a.restaurant_id)).size;
+  // Count unique restaurant names (not IDs, since same restaurant can have multiple records)
+  document.getElementById('st2').textContent = new Set(data.map(a => a.restaurants?.name).filter(Boolean)).size;
   document.getElementById('st3').textContent = data.reduce((s, a) => s + (a.sku_count || 0), 0);
 
   const types = data.map(a => a.restaurants?.food_type).filter(Boolean);
-  const top = types.sort((a, b) => types.filter(x => x === b).length - types.filter(x => x === a).length)[0];
-  document.getElementById('st4').textContent = top || '—';
+  const top = types.length ? types.sort((a,b) =>
+    types.filter(x=>x===b).length - types.filter(x=>x===a).length
+  )[0] : '—';
+  document.getElementById('st4').textContent = top;
 
-  const rows = data.slice(0, 5).map(a => `
+  _allRecent = data;
+  renderRecentRows(data.slice(0, 10));
+}
+
+function renderRecentRows(data) {
+  if (!data.length) {
+    document.getElementById('recentTable').innerHTML =
+      `<tr><td colspan="6" style="text-align:center;color:var(--text-l);padding:24px">Sin análisis este mes</td></tr>`;
+    return;
+  }
+  const tierDot = { premium:'🔴', medio:'🟡', economico:'🟢' };
+  document.getElementById('recentTable').innerHTML = data.map(a => `
     <tr>
-      <td><div class="td-main">${a.restaurants?.name || '—'}</div><div class="td-sub">${a.restaurants?.city || ''}</div></td>
+      <td><div class="td-main">${a.restaurants?.name || '—'}</div></td>
       <td><span class="badge badge-yellow">${a.restaurants?.food_type || '—'}</span></td>
+      <td style="font-size:12px">${a.avg_price_platillos ? '$'+Math.round(a.avg_price_platillos)+' '+( tierDot[a.price_tier]||'') : '—'}</td>
       <td>${formatDate(a.created_at)}</td>
       <td>${a.sku_count || '—'}</td>
-      <td><span class="badge ${a.status === 'complete' ? 'badge-green' : 'badge-yellow'}">${a.status === 'complete' ? 'Completo' : 'En proceso'}</span></td>
       <td><a href="results.html?id=${a.id}" class="btn btn-outline btn-xs">Ver</a></td>
     </tr>`).join('');
+}
 
-  document.getElementById('recentTable').innerHTML = rows ||
-    `<tr><td colspan="6" style="text-align:center;color:var(--text-l);padding:24px">Sin análisis este mes</td></tr>`;
+function filterRecent(query) {
+  const q = query.toLowerCase().trim();
+  if (!q) {
+    renderRecentRows(_allRecent.slice(0, 10));
+    document.getElementById('noResults').style.display = 'none';
+    return;
+  }
+  const filtered = _allRecent.filter(a =>
+    (a.restaurants?.name || '').toLowerCase().includes(q) ||
+    (a.restaurants?.food_type || '').toLowerCase().includes(q)
+  );
+  if (filtered.length) {
+    renderRecentRows(filtered);
+    document.getElementById('noResults').style.display = 'none';
+  } else {
+    document.getElementById('recentTable').innerHTML = '';
+    document.getElementById('noResults').style.display = 'block';
+  }
 }
 </script>
 </body>
