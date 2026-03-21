@@ -255,7 +255,14 @@ P3: Carnes frías/embutidos (chorizo, jamón, salchicha, tocino)
 P4: Quesos y lácteos
 P5: Resto (salsas, condimentos, mieles, bebidas, aceites, etc.)
 
-REGLA CRÍTICA PARA TOP 10: El top10_skus DEBE ordenarse PRIMERO por prioridad (P1 antes que P2, P2 antes que P3, etc.) y SOLO usar menciones como desempate entre productos de la MISMA prioridad. Un producto P1 con 1 mención SIEMPRE va antes que un producto P5 con 10 menciones. Las proteínas premium SIEMPRE lideran el top 10.
+REGLA CRÍTICA PARA TOP 10 Y MATCHING — OBLIGATORIO:
+1. El array matching_table DEBE ordenarse: primero todos los P1, luego P2, P3, P4, P5
+2. Dentro de cada prioridad, ordenar por número de menciones descendente
+3. NUNCA dejar sku vacío si hay un producto en el catálogo que aplique
+4. NUNCA dejar dishes vacío — siempre listar los platillos donde aparece el ingrediente
+5. Si no hay match exacto, poner el más cercano con confidence "Baja"
+6. Solo poner match_type "No encontrado" si genuinamente no existe nada en el catálogo
+7. El top10_skus también va ordenado P1→P5, menciones como desempate
 
 TIPOS DE COMIDA — elige el más cercano:
 Mexicana, Italiana, Americana, Mariscos, Asiática, Mediterránea,
@@ -313,6 +320,10 @@ PASO 3 — REPORTAR:
 - Producto genérico → MEJOR opción + hasta 3 alternativas con {sku, material completo}
 - GAP solo si genuinamente no hay nada en el catálogo
 - NUNCA gap para: arrachera, t-bone, cowboy, short rib, ribeye, camarón, pulpo, langosta, alitas, chorizo
+- NUNCA reportar como gap: frutas (piña, mango, limón, fresa, naranja, coco, etc.),
+  verduras frescas (pepino, lechuga, arúgula, espinaca, chile, jitomate, pimiento, cebolla,
+  zanahoria, betabel, apio, brócoli, etc.), hierbas frescas (cilantro, perejil, albahaca,
+  romero, tomillo, etc.) — estos NO son productos de una distribuidora de alimentos
 
 CAMPOS OBLIGATORIOS EN matching_table (TODOS los campos):
 - "dishes": array con nombres de platillos donde aparece este ingrediente (máx 5)
@@ -542,7 +553,107 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
     };
   }
 
+  // Post-process: normalize and sort regardless of model
+  parsed = normalizeAnalysisResult(parsed);
   return parsed;
+}
+
+// ── POST-PROCESSING ───────────────────
+function normalizeAnalysisResult(d) {
+  if (!d) return d;
+  const PRIO = { P1:1, P2:2, P3:3, P4:4, P5:5 };
+  const gp = r => PRIO[r.priority||r.prioridad||'P5'] || 5;
+
+  // Sort matching_table P1→P5
+  if (Array.isArray(d.matching_table)) {
+    d.matching_table = d.matching_table
+      .filter(r => r.ingredient || r.ingredient_name)
+      .sort((a,b) => gp(a)-gp(b) || (b.mentions||1)-(a.mentions||1))
+      .map(r => ({
+        ...r,
+        ingredient:      r.ingredient || r.ingredient_name || r.ingrediente || '',
+        ingredient_name: r.ingredient || r.ingredient_name || r.ingrediente || '',
+        sku:       r.sku || r.SKU || '',
+        material:  r.material || r.Material || '',
+        brand:     r.brand || r.Brand || r.marca || r.Marca || '',
+        familia:   r.familia || r.Familia || r.family || '',
+        sublinea:  r.sublinea || r.Sublinea || '',
+        priority:  r.priority || r.prioridad || 'P5',
+        confidence:r.confidence || r.confianza || (r.sku ? 'Media' : 'Baja'),
+        dishes:    r.dishes || r.platillos || r.dish_names || [],
+        mentions:  r.mentions || r.menciones || (r.dishes||[]).length || 1,
+        alternatives: (r.alternatives || r.alternativas || []).map(a =>
+          typeof a === 'string' ? {sku:a, material:''} : a
+        )
+      }));
+  }
+
+  // Sort sku_table P1→P5
+  if (Array.isArray(d.sku_table)) {
+    d.sku_table = d.sku_table
+      .filter(r => r.sku || r.SKU)
+      .sort((a,b) => gp(a)-gp(b) || (b.mentions||0)-(a.mentions||0))
+      .map(r => ({
+        ...r,
+        sku:     r.sku || r.SKU || '',
+        material:r.material || r.Material || '',
+        brand:   r.brand || r.marca || '',
+        familia: r.familia || r.Familia || r.family || '',
+        sublinea:r.sublinea || r.Sublinea || '',
+        priority:r.priority || r.prioridad || 'P5',
+        mentions:r.mentions || r.menciones || 0
+      }));
+  }
+
+  // Sort top10_skus
+  const s = d.summary || {};
+  if (Array.isArray(s.top10_skus)) {
+    s.top10_skus.sort((a,b) => gp(a)-gp(b) || (b.mentions||0)-(a.mentions||0));
+  }
+
+  // Filter gaps — remove fruits, vegetables, herbs, condiments not in distributor catalog
+  if (Array.isArray(d.gaps)) {
+    const EXCLUDE_TERMS = [
+      // Verduras
+      'pepino','lechuga','arugula','arúgula','espinaca','acelga','betabel','zanahoria',
+      'apio','brócoli','brocoli','coliflor','cebolla','cebollín','cebollin','poro',
+      'pimiento','chile','jalapeño','jalapeno','serrano','habanero','poblano','pasilla',
+      'ancho','mulato','guajillo','chipotle','epazote','hierba','hierbas','cilantro',
+      'perejil','albahaca','romero','tomillo','orégano','oregano','laurel','menta',
+      'estragón','estragon','eneldo','cebolleta','chivo','jitomate','tomate','tomatillo',
+      'aguacate','guacamole',
+      // Frutas
+      'piña','pina','mango','papaya','manzana','naranja','limón','limon','lima',
+      'fresa','frambuesa','mora','arándano','arandano','uva','sandía','sandia',
+      'melón','melon','kiwi','maracuyá','maracuya','coco','plátano','platano',
+      'durazno','melocotón','melocoton','higo','dátil','datil','pera',
+      // Condimentos básicos / especias
+      'sal ','pimienta negra','pimienta blanca','azúcar','azucar','vinagre',
+      'agua ','agua
+','aceite vegetal','aceite de girasol',
+      // Hongos frescos
+      'champiñon','champiñón','hongo','seta','portobello',
+    ];
+
+    const normalize = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    d.gaps = d.gaps.filter(gap => {
+      const g = normalize(gap);
+      return !EXCLUDE_TERMS.some(term => g.includes(normalize(term)));
+    });
+  }
+
+  // Normalize recommendations
+  if (Array.isArray(d.recommendations)) {
+    d.recommendations = d.recommendations
+      .map(r => ({
+        title: r.title || r.titulo || '',
+        body:  r.body  || r.cuerpo || r.descripcion || r.description || '',
+        type:  r.type  || r.tipo  || 'oportunidad'
+      }))
+      .filter(r => r.title && r.body);
+  }
+
+  return d;
 }
 
 // ── SAVE TO DB ────────────────────────
