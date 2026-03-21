@@ -184,7 +184,7 @@ function buildSmartCatalogSummary() {
     const familia = normalize(r.Familia || r.familia || '');
     const keywords = r.Keywords || r.keywords || r.KEYWORDS || '';
     // Compact: truncate material to 35 chars, drop Línea/Marca (saves ~40% tokens)
-    const mat = (r.Material||r.material||'').substring(0,35);
+    const mat = (r.Material||r.material||'').substring(0,28);
     const sub = r['Sublínea']||r.sublinea||'';
     const kw  = r.Keywords||r.keywords||'';
     const line = kw ? `${r.SKU||r.sku}|${mat}|${familia}|${sub}|${kw}` : `${r.SKU||r.sku}|${mat}|${familia}|${sub}`;
@@ -201,8 +201,8 @@ function buildSmartCatalogSummary() {
   // Build final list: ALL priority + up to 200 secondary + up to 100 other
   const finalList = [
     ...priorityProducts,
-    ...secondaryProducts.slice(0, 150),
-    ...otherProducts.slice(0, 50)
+    ...secondaryProducts.slice(0, 80),
+    ...otherProducts.slice(0, 20)
   ];
 
   dbg(`Catálogo: ${catalogData.length} total → ${priorityProducts.length} proteína + ${Math.min(secondaryProducts.length,200)} secundarios = ${finalList.length} enviados a Claude`);
@@ -463,8 +463,10 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
 
   // Llamar a /api/analyze (proxy serverless en Vercel — evita CORS)
   // Use model from config (set in Admin → Configuración → Modelo de IA)
-  const activeModel = window._mlConfig?.activeModel
-    || localStorage.getItem('ml_active_model')
+  // localStorage wins — set by Admin → Configuración dropdown
+  // _mlConfig.activeModel is the Vercel env var default (lower priority)
+  const activeModel = localStorage.getItem('ml_active_model')
+    || window._mlConfig?.activeModel
     || 'claude-haiku-4-5-20251001';
   dbg(`Modelo activo: ${activeModel}`);
 
