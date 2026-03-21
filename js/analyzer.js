@@ -203,14 +203,30 @@ function buildSmartCatalogSummary() {
     }
   });
 
-  // Build final list: ALL priority + up to 200 secondary + up to 100 other
-  const finalList = [
+  // Scale catalog size based on number of pages being analyzed
+  // More pages = bigger request body = need smaller catalog
+  const pageCount = window._currentFileCount || 1;
+  const maxCatalogChars = pageCount >= 4 ? 35000
+    : pageCount === 3 ? 45000
+    : pageCount === 2 ? 55000
+    : 70000;
+
+  const combined = [
     ...priorityProducts,
-    ...secondaryProducts.slice(0, 200),
-    ...otherProducts.slice(0, 100)
+    ...secondaryProducts.slice(0, 150),
+    ...otherProducts.slice(0, 50)
   ];
 
-  dbg(`Catálogo: ${catalogData.length} total → ${priorityProducts.length} proteína + ${Math.min(secondaryProducts.length,200)} secundarios = ${finalList.length} enviados a Claude`);
+  // Trim to char budget
+  let finalList = [];
+  let charCount = 0;
+  for (const line of combined) {
+    if (charCount + line.length > maxCatalogChars) break;
+    finalList.push(line);
+    charCount += line.length + 1;
+  }
+
+  dbg(`Catálogo: ${catalogData.length} total → ${priorityProducts.length} proteína → ${finalList.length} enviados (~${Math.round(charCount/1000)}k chars, ${pageCount} páginas)`);
 
   return finalList.join('\n');
 }
@@ -463,7 +479,8 @@ async function callClaudeAnalysis(files, bizName, bizCity) {
   } catch(e) {}
 
   const activeModel = localStorage.getItem('ml_active_model') || 'claude-sonnet-4-6';
-  dbg(`Modelo activo: ${activeModel}`);
+  window._currentFileCount = files.length; // used by catalog builder
+  dbg(`Modelo activo: ${activeModel} | Páginas: ${files.length}`);
 
   const resp = await fetch('/api/analyze', {
     method: 'POST',
