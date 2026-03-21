@@ -92,6 +92,13 @@
                   <div style="font-size:11px;color:var(--text-m)" id="catalogMeta"></div>
                 </div>
               </div>
+              <div style="margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <label class="form-label" style="font-size:12px;margin:0;white-space:nowrap">Sucursal destino:</label>
+                <select class="form-input" id="catalogOffice" style="font-size:12px;padding:5px 8px;max-width:220px">
+                  <option value="">Catálogo general</option>
+                </select>
+                <button class="btn btn-outline btn-xs" onclick="loadOfficesIntoSelect('catalogOffice')" style="white-space:nowrap">↺ Cargar sucursales</button>
+              </div>
               <div style="display:flex;gap:8px;flex-wrap:wrap">
                 <label class="btn btn-primary btn-sm" style="cursor:pointer">
                   ↑ Cargar Excel / CSV
@@ -125,6 +132,42 @@
               </div>
               <div style="margin-top:10px;font-size:11px;color:var(--text-l)">
                 💡 También puedes agregar la columna <strong>Keywords</strong> directamente en tu Excel antes de cargarlo.
+              </div>
+            </div>
+          </div>
+
+          <!-- OFFICES MANAGEMENT -->
+          <div class="card">
+            <div class="card-body">
+              <div class="card-header">
+                <div class="card-title">🏢 Sucursales / Oficinas de Ventas</div>
+                <button class="btn btn-primary btn-sm" onclick="openOfficeModal()">+ Nueva</button>
+              </div>
+              <div id="officesList" style="margin-top:10px"></div>
+            </div>
+          </div>
+
+          <!-- OFFICE SKUs UPLOAD -->
+          <div class="card">
+            <div class="card-body">
+              <div class="card-title">📋 SKUs por Sucursal</div>
+              <p style="font-size:12px;color:var(--text-m);margin-bottom:12px;line-height:1.6">
+                Sube un Excel con dos columnas: <strong>Sucursal</strong> (código) y <strong>SKU</strong>.
+                Los asesores de cada sucursal solo verán estos productos al analizar menús.
+              </p>
+              <div style="background:var(--gray-l);border-radius:var(--r-s);padding:10px 12px;font-size:12px;margin-bottom:12px">
+                <strong>Formato del Excel:</strong><br>
+                <span style="font-family:monospace">Columna A: Sucursal → CDMX-NORTE</span><br>
+                <span style="font-family:monospace">Columna B: SKU → 70011249</span>
+              </div>
+              <div id="officeSkusStatus" style="display:none;margin-bottom:10px;font-size:12px"></div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <label class="btn btn-primary btn-sm" style="cursor:pointer">
+                  ↑ Cargar Excel SKUs × Sucursal
+                  <input type="file" id="officeSkusInput" accept=".xlsx,.xls,.csv" style="display:none"
+                    onchange="handleOfficeSkus(this)">
+                </label>
+                <button class="btn btn-outline btn-sm" onclick="downloadOfficeSkusTemplate()">↓ Descargar plantilla</button>
               </div>
             </div>
           </div>
@@ -182,6 +225,30 @@
   </div>
 </div>
 
+<!-- OFFICE MODAL -->
+<div id="modalOffice" class="modal" style="display:none">
+  <div class="modal-box" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title" id="officeModalTitle">Nueva sucursal</div>
+      <button class="modal-close" onclick="closeModal('modalOffice')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Nombre <span style="color:var(--red)">*</span></label>
+        <input class="form-input" id="officeName" placeholder="Ej: Oficina CDMX Norte">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Código <span style="color:var(--red)">*</span></label>
+        <input class="form-input" id="officeCode" placeholder="Ej: CDMX-NORTE" style="text-transform:uppercase">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalOffice')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveOffice()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <script src="js/supabase.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/ui.js"></script>
@@ -195,7 +262,137 @@
   loadCurrentValues();
   initKeywordsEditor();
   loadProviderStatus();
+  loadOffices();
 })();
+
+// ── SHARED UTILITY ───────────────────────
+async function loadOfficesIntoSelect(selectId) {
+  try {
+    const sb = await getSupabaseAsync();
+    if (!sb) return;
+    const { data } = await sb.from('offices').select('id,name,code').eq('active',true).order('name');
+    const sel = document.getElementById(selectId);
+    if (!sel || !data) return;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Catálogo general</option>' +
+      data.map(o => `<option value="${o.id}">${o.name} (${o.code})</option>`).join('');
+    if (cur) sel.value = cur;
+  } catch(e) { console.warn('loadOfficesIntoSelect:', e); }
+}
+
+// ── OFFICES ───────────────────────────
+let _editingOfficeId = null;
+
+async function loadOffices() {
+  try {
+    const sb = await getSupabaseAsync();
+    if (!sb) return;
+    const { data } = await sb.from('offices').select('*').order('name');
+    const el = document.getElementById('officesList');
+    if (!el) return;
+    if (!data?.length) {
+      el.innerHTML = '<div style="font-size:12px;color:var(--text-m);padding:8px">Sin sucursales creadas. Agrega la primera.</div>';
+      return;
+    }
+    el.innerHTML = data.map(o => `
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600">${o.name}</div>
+          <div style="font-size:11px;color:var(--text-m);font-family:monospace">${o.code}
+            <span style="margin-left:6px;background:${o.active?'#DCFCE7':'#FEE2E2'};color:${o.active?'#166534':'#991B1B'};font-size:9px;padding:1px 5px;border-radius:4px">${o.active?'Activa':'Inactiva'}</span>
+          </div>
+        </div>
+        <button class="btn btn-outline btn-xs" onclick="openOfficeModal('${o.id}','${o.name.replace(/'/g,"\'")}','${o.code}')">Editar</button>
+      </div>`).join('');
+  } catch(e) { console.warn('loadOffices:', e); }
+}
+
+function openOfficeModal(id = null, name = '', code = '') {
+  _editingOfficeId = id;
+  document.getElementById('officeModalTitle').textContent = id ? 'Editar sucursal' : 'Nueva sucursal';
+  document.getElementById('officeName').value = name;
+  document.getElementById('officeCode').value = code;
+  document.getElementById('modalOffice').style.display = 'flex';
+}
+
+async function saveOffice() {
+  const name = document.getElementById('officeName').value.trim();
+  const code = document.getElementById('officeCode').value.trim().toUpperCase();
+  if (!name || !code) { toast('Nombre y código son requeridos', 'error'); return; }
+
+  const sb = await getSupabaseAsync();
+  if (!sb) return;
+
+  if (_editingOfficeId) {
+    await sb.from('offices').update({ name, code }).eq('id', _editingOfficeId);
+    toast('Sucursal actualizada', 'success');
+  } else {
+    await sb.from('offices').insert({ name, code, active: true });
+    toast('Sucursal creada', 'success');
+  }
+  closeModal('modalOffice');
+  loadOffices();
+}
+
+// ── OFFICE SKUs UPLOAD ────────────────
+async function handleOfficeSkus(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const statusEl = document.getElementById('officeSkusStatus');
+  statusEl.style.display = 'block';
+  statusEl.innerHTML = '<span style="color:var(--text-m)">⏳ Procesando...</span>';
+
+  try {
+    // Parse Excel using XLSX
+    const data = await file.arrayBuffer();
+    const wb   = XLSX.read(data, { type: 'array' });
+    const ws   = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+    if (!rows.length) throw new Error('El archivo está vacío');
+
+    // Normalize column names
+    const normalized = rows.map(r => ({
+      sucursal: String(r.Sucursal || r.sucursal || r.SUCURSAL || r['Oficina'] || '').trim().toUpperCase(),
+      sku:      String(r.SKU || r.sku || r.Sku || '').trim()
+    })).filter(r => r.sucursal && r.sku);
+
+    if (!normalized.length) throw new Error('Sin filas válidas. Verifica que las columnas se llamen "Sucursal" y "SKU"');
+
+    statusEl.innerHTML = `<span style="color:var(--text-m)">📤 Subiendo ${normalized.length} filas...</span>`;
+
+    const resp = await fetch('/api/upload-office-skus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows: normalized })
+    });
+
+    const result = await resp.json();
+    if (!resp.ok) throw new Error(result.error);
+
+    statusEl.innerHTML = `<span style="color:#166534">✅ ${result.inserted} pares cargados · ${result.offices_created} sucursales nuevas</span>`;
+    loadOffices(); // refresh offices list
+    input.value = '';
+
+  } catch(e) {
+    statusEl.innerHTML = `<span style="color:var(--red)">❌ ${e.message}</span>`;
+  }
+}
+
+function downloadOfficeSkusTemplate() {
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['Sucursal', 'SKU'],
+    ['CDMX-NORTE', '70011249'],
+    ['CDMX-NORTE', '70018005'],
+    ['CDMX-NORTE', '70070095'],
+    ['MTY', '70011249'],
+    ['MTY', '70070041'],
+  ]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'SKUs_Sucursal');
+  XLSX.writeFile(wb, 'Plantilla_SKUs_Sucursal.xlsx');
+}
 
 async function loadProviderStatus() {
   try {
@@ -310,7 +507,7 @@ async function handleCatalog(input) {
       const resp = await fetch('/api/upload-catalog', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ products: rows, company: 'default' })
+        body: JSON.stringify({ products: rows, company: 'default', office_id: document.getElementById('catalogOffice')?.value || null })
       });
 
       const result = await resp.json();

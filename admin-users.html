@@ -51,6 +51,12 @@
               <label class="form-label">Código de asesor</label>
               <input class="form-input" id="uAdvisorCode" placeholder="Ej: ASE-001">
             </div>
+            <div class="form-group">
+              <label class="form-label">Sucursal / Oficina</label>
+              <select class="form-input" id="uOffice">
+                <option value="">Sin sucursal asignada</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -167,6 +173,18 @@ function renderUsers(list) {
     </div>`).join('') || '<div style="color:var(--text-l);font-size:13px;padding:12px 0">Sin usuarios</div>';
 }
 
+async function loadOfficesIntoSelect(selectId) {
+  try {
+    const sb = await getSupabaseAsync();
+    if (!sb) return;
+    const { data } = await sb.from('offices').select('id,name,code').eq('active',true).order('name');
+    const sel = document.getElementById(selectId);
+    if (!sel || !data) return;
+    sel.innerHTML = '<option value="">Sin sucursal asignada</option>' +
+      data.map(o => `<option value="${o.id}">${o.name} (${o.code})</option>`).join('');
+  } catch(e) { console.warn('loadOffices:', e); }
+}
+
 function openUserModal() {
   document.getElementById('modalTitle').textContent = 'Agregar usuario';
   document.getElementById('uName').value = '';
@@ -174,6 +192,7 @@ function openUserModal() {
   document.getElementById('uPassword').value = '';
   document.getElementById('uRole').value = 'advisor';
   openModal('modalUser');
+  loadOfficesIntoSelect('uOffice');
 }
 
 function editUser(id, name, email, role) {
@@ -213,7 +232,7 @@ async function saveUser() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.access_token}`
       },
-      body: JSON.stringify({ email, password: pwd, name, role, advisor_code: advisorCode })
+      body: JSON.stringify({ email, password: pwd, name, role, advisor_code: advisorCode, office_id: document.getElementById('uOffice')?.value || null })
     });
 
     const result = await resp.json();
