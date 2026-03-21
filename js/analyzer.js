@@ -406,15 +406,15 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
   }
 
   // Llamar a /api/analyze (proxy serverless en Vercel — evita CORS)
-  // Get JWT for auth
+  // Auth header for Supabase session
   let authHeader = {};
   try {
-    const sb = window._mlSupabase || (typeof getSupabase === 'function' && getSupabase());
+    const sb = window._mlSupabase;
     if (sb) {
       const { data: { session } } = await sb.auth.getSession();
       if (session?.access_token) authHeader = { 'Authorization': `Bearer ${session.access_token}` };
     }
-  } catch(e) { /* demo mode */ }
+  } catch(e) {}
 
   const resp = await fetch('/api/analyze', {
     method: 'POST',
