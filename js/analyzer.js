@@ -199,15 +199,26 @@ function buildSmartCatalogSummary() {
   });
 
   // Build final list: ALL priority + up to 200 secondary + up to 100 other
-  const finalList = [
+  // Hard cap: max 60k chars total to leave room for output tokens
+  const MAX_CATALOG_CHARS = 60000;
+  let combined = [
     ...priorityProducts,
     ...secondaryProducts.slice(0, 80),
     ...otherProducts.slice(0, 20)
   ];
 
-  dbg(`Catálogo: ${catalogData.length} total → ${priorityProducts.length} proteína + ${Math.min(secondaryProducts.length,200)} secundarios = ${finalList.length} enviados a Claude`);
+  // Trim if over limit
+  let totalChars = 0;
+  const trimmed = [];
+  for (const line of combined) {
+    if (totalChars + line.length > MAX_CATALOG_CHARS) break;
+    trimmed.push(line);
+    totalChars += line.length + 1;
+  }
 
-  return finalList.join('\n');
+  dbg(`Catálogo: ${catalogData.length} total → ${priorityProducts.length} proteína → ${trimmed.length} enviados (${Math.round(totalChars/1000)}k chars)`);
+
+  return trimmed.join('\n');
 }
 
 // ── BUILD SYSTEM PROMPT ───────────────
