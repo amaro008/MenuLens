@@ -70,8 +70,10 @@ async function callGemini(req, res, { model, max_tokens, system, messages }) {
     geminiContents.push({ role: msg.role === 'assistant' ? 'model' : 'user', parts });
   }
 
-  const geminiModel = model.includes('/') ? model : `models/${model}`;
+  // Gemini model name: use as-is if it already has 'models/' prefix, otherwise add it
+  const geminiModel = model.startsWith('models/') ? model : `models/${model}`;
   const url = `https://generativelanguage.googleapis.com/v1beta/${geminiModel}:generateContent?key=${apiKey}`;
+  console.log('[analyze] Gemini URL model:', geminiModel);
   const body = {
     contents: geminiContents,
     generationConfig: { maxOutputTokens: max_tokens || 16000, temperature: 0.1, responseMimeType: 'application/json' }
