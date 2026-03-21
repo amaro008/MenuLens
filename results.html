@@ -215,6 +215,13 @@ function esc(str) {
   }
 })();
 
+function getCurrentAnalysis() {
+  try {
+    const raw = sessionStorage.getItem('ml_current_analysis');
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+
 async function loadFromDB(id) {
   const sb = getSupabase();
   if (!sb) { _data = getCurrentAnalysis(); renderAll(_data); return; }
@@ -230,14 +237,12 @@ async function loadFromDB(id) {
 }
 
 function renderAll(d) {
-  if (!d) return;
+  if (!d) { console.error('renderAll: no data'); return; }
+  console.log('renderAll data keys:', Object.keys(d));
+  console.log('summary:', d.summary);
+  console.log('matching_table length:', (d.matching_table||[]).length);
+  console.log('sku_table length:', (d.sku_table||[]).length);
   const s = d.summary || {};
-
-  // Header
-  document.getElementById('resName').textContent = d.restaurant_name || d.bizName || '—';
-  document.getElementById('resFoodType').textContent = d.food_type || '—';
-  document.getElementById('resCity').textContent = d.bizCity || '';
-  // Maps link removed
 
   // ── HEADER ──────────────────────────
   document.getElementById('resName').textContent = d.restaurant_name || d.bizName || '—';
