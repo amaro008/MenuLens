@@ -421,7 +421,7 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
     headers: { 'Content-Type': 'application/json', ...authHeader },
     body: JSON.stringify({
       model: localStorage.getItem('ml_active_model') || 'claude-sonnet-4-6',
-      max_tokens: 32000,
+      max_tokens: 64000,
       system: finalPrompt,
       messages: [{ role: 'user', content: userContent }]
     })
