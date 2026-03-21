@@ -183,7 +183,11 @@ function buildSmartCatalogSummary() {
   catalogData.forEach(r => {
     const familia = normalize(r.Familia || r.familia || '');
     const keywords = r.Keywords || r.keywords || r.KEYWORDS || '';
-    const line = `SKU:${r.SKU||r.sku||''}|Material:${r.Material||r.material||''}|Marca:${r.Marca||r.marca||''}|Familia:${familia}|Sublinea:${r['Sublínea']||r.sublinea||''}|Línea:${r['Línea de Ventas']||r.linea_ventas||''}${keywords ? '|Keywords:'+keywords : ''}`;
+    // Compact: truncate material to 35 chars, drop Línea/Marca (saves ~40% tokens)
+    const mat = (r.Material||r.material||'').substring(0,35);
+    const sub = r['Sublínea']||r.sublinea||'';
+    const kw  = r.Keywords||r.keywords||'';
+    const line = kw ? `${r.SKU||r.sku}|${mat}|${familia}|${sub}|${kw}` : `${r.SKU||r.sku}|${mat}|${familia}|${sub}`;
 
     if (PRIORITY_FAMILIES.includes(familia)) {
       priorityProducts.push(line);
@@ -197,8 +201,8 @@ function buildSmartCatalogSummary() {
   // Build final list: ALL priority + up to 200 secondary + up to 100 other
   const finalList = [
     ...priorityProducts,
-    ...secondaryProducts.slice(0, 200),
-    ...otherProducts.slice(0, 100)
+    ...secondaryProducts.slice(0, 150),
+    ...otherProducts.slice(0, 50)
   ];
 
   dbg(`Catálogo: ${catalogData.length} total → ${priorityProducts.length} proteína + ${Math.min(secondaryProducts.length,200)} secundarios = ${finalList.length} enviados a Claude`);
@@ -211,10 +215,11 @@ function buildSystemPrompt() {
   const catalogSummary = buildSmartCatalogSummary();
   const synonymMap = buildSublineaSynonymMap();
 
-  // Format synonym map for the prompt
+  // Format synonym map — top terms only to keep prompt lean
   const synonymMapText = Object.entries(synonymMap)
-    .map(([term, subs]) => `  "${term}" → Sublínea: ${subs.join(' o ')}`)
-    .join('\n');
+    .slice(0, 25) // limit to 25 most important
+    .map(([term, subs]) => `${term}→${subs[0]}`)
+    .join(', ');
 
   return buildSystemPromptWithCatalog(catalogSummary, synonymMapText);
 }
@@ -291,8 +296,7 @@ REGLA DE CONTEXTO (CRÍTICA para desambiguar):
 - "atún" en sándwich → ABARROTES puede ser válido
 - Usar Keywords del catálogo si están disponibles para confirmar el match
 
-MAPA DE SUBLÍNEAS — PUNTO DE PARTIDA PARA MATCHING:
-${synonymMapText || "(mapa no disponible)"}
+MAPA SUBLÍNEAS: ${synonymMapText || "usar búsqueda por Material"}
 
 ESTRATEGIA DE MATCHING EN 3 PASOS:
 
@@ -411,7 +415,7 @@ function buildReducedPrompt() {
   console.log(`Reduced catalog: ${reduced.length} products`);
 
   const catalogSummary = reduced.map(r =>
-    `SKU:${r.SKU||r.sku||''}|Material:${r.Material||r.material||''}|Marca:${r.Marca||r.marca||''}|Familia:${(r.Familia||r.familia||'').toUpperCase()}|Sublinea:${r['Sublínea']||r.sublinea||''}`
+    `${r.SKU||r.sku||''}|${(r.Material||r.material||'').substring(0,35)}|${(r.Familia||r.familia||'').toUpperCase()}|${r['Sublínea']||r.sublinea||''}`
   ).join('\n');
 
   return buildSystemPromptWithCatalog(catalogSummary);
@@ -629,8 +633,7 @@ function normalizeAnalysisResult(d) {
       'durazno','melocotón','melocoton','higo','dátil','datil','pera',
       // Condimentos básicos / especias
       'sal ','pimienta negra','pimienta blanca','azúcar','azucar','vinagre',
-      'agua ','agua
-','aceite vegetal','aceite de girasol',
+      'agua ','aceite vegetal','aceite de girasol',
       // Hongos frescos
       'champiñon','champiñón','hongo','seta','portobello',
     ];
