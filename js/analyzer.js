@@ -465,7 +465,7 @@ async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
   // Use model from config (set in Admin → Configuración → Modelo de IA)
   const activeModel = window._mlConfig?.activeModel
     || localStorage.getItem('ml_active_model')
-    || window._mlConfig?.activeModel || localStorage.getItem('ml_active_model') || 'claude-sonnet-4-6';
+    || 'claude-haiku-4-5-20251001';
   dbg(`Modelo activo: ${activeModel}`);
 
   const resp = await fetch('/api/analyze', {
