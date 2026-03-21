@@ -2,6 +2,19 @@
 export const config = { api: { bodyParser: { sizeLimit: '1mb' } } };
 
 export default async function handler(req, res) {
+  // PATCH = update password only
+  if (req.method === 'PATCH') {
+    const serviceKey = process.env.SUPABASE_SERVICE_KEY;
+    const { user_id, password } = req.body;
+    if (!user_id || !password) return res.status(400).json({ error: 'user_id and password required' });
+    const r = await fetch(`${process.env.SUPABASE_URL}/auth/v1/admin/users/${user_id}`, {
+      method: 'PUT',
+      headers: { 'apikey': serviceKey, 'Authorization': `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password })
+    });
+    const d = await r.json();
+    return r.ok ? res.status(200).json({ success: true }) : res.status(r.status).json({ error: d.message });
+  }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const supabaseUrl = process.env.SUPABASE_URL;
@@ -29,7 +42,7 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: 'Admin role required' });
   }
 
-  const { email, password, name, role, advisor_code } = req.body;
+  const { email, password, name, role, advisor_code, office_id } = req.body;
   if (!email || !password || !name) return res.status(400).json({ error: 'email, password, name required' });
 
   const headers = {
@@ -52,7 +65,7 @@ export default async function handler(req, res) {
     await fetch(`${supabaseUrl}/rest/v1/users`, {
       method: 'POST',
       headers: { ...headers, 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify({ id: authData.id, email, name, role: role||'advisor', advisor_code: advisor_code||null, active: true })
+      body: JSON.stringify({ id: authData.id, email, name, role: role||'advisor', advisor_code: advisor_code||null, office_id: office_id||null, active: true })
     });
 
     return res.status(200).json({ success: true, id: authData.id });
