@@ -402,20 +402,33 @@ function buildReducedPrompt() {
 }
 
 // ── CALL CLAUDE API via Vercel proxy ──
-async function callClaudeAnalysis(fileBase64, fileType, bizName, bizCity) {
-  const mediaType = fileType === 'application/pdf' ? 'application/pdf' : (fileType || 'image/jpeg');
-  const isPdf = fileType === 'application/pdf';
+async function callClaudeAnalysis(files, bizName, bizCity) {
+  // Support both old single-file call and new multi-file array
+  if (!Array.isArray(files)) {
+    files = [{ base64: files, type: arguments[1] }];
+    bizName = arguments[2];
+    bizCity = arguments[3];
+  }
 
-  const userContent = [
-    {
-      type: isPdf ? 'document' : 'image',
-      source: { type: 'base64', media_type: mediaType, data: fileBase64 }
-    },
-    {
-      type: 'text',
-      text: `Restaurante: "${bizName}"${bizCity ? `, ubicado en ${bizCity}` : ''}.\nAnaliza este menú siguiendo todas las reglas del sistema. Responde SOLO con JSON válido.`
+  // Build multi-page content — all files sent as pages of the same menu
+  const userContent = [];
+
+  files.forEach((f, i) => {
+    const mediaType = f.type === 'application/pdf' ? 'application/pdf' : (f.type || 'image/jpeg');
+    const isPdf = f.type === 'application/pdf';
+    if (files.length > 1) {
+      userContent.push({ type: 'text', text: `Página ${i+1} de ${files.length}:` });
     }
-  ];
+    userContent.push({
+      type: isPdf ? 'document' : 'image',
+      source: { type: 'base64', media_type: mediaType, data: f.base64 }
+    });
+  });
+
+  userContent.push({
+    type: 'text',
+    text: `Restaurante: "${bizName}"${bizCity ? `, ubicado en ${bizCity}` : ''}.\n${files.length > 1 ? `Este menú tiene ${files.length} páginas, analízalas TODAS como un solo menú completo.\n` : ''}Analiza este menú siguiendo todas las reglas del sistema. Responde SOLO con JSON válido.`
+  });
 
   // Build prompt and check size
   const systemPrompt = buildSystemPrompt();
