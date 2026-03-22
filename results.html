@@ -366,7 +366,9 @@ function renderAll(d) {
   }
 
   // ── MATCHING TABLE (Tab 1) ──
-  document.getElementById('matchBody').innerHTML = matchTable.map(r => {
+  // Only show rows with a real SKU match
+  const matchedOnly = matchTable.filter(r => r.sku && r.sku !== '' && r.match_type !== 'No encontrado');
+  document.getElementById('matchBody').innerHTML = matchedOnly.map(r => {
     const dishes = esc((r.dishes||r.dish_names||[]).slice(0,3).join(', ')||'—');
     const more = (r.dishes||r.dish_names||[]).length>3 ? ` <span style="color:var(--text-m);font-size:10px">+${(r.dishes||r.dish_names||[]).length-3} más</span>` : '';
     const alts = (r.alternatives||[]).slice(0,3).map(a => {
@@ -390,7 +392,7 @@ function renderAll(d) {
       <td><span class="badge" style="background:${pCol.bg};color:${pCol.text};font-size:9px">${r.priority||'—'}</span></td>
       <td>${alts||'<span style="color:var(--text-l);font-size:11px">—</span>'}</td>
     </tr>`;
-  }).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--text-l);padding:20px">Sin datos de matching</td></tr>';
+  }).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--text-l);padding:20px">Sin matches en el catálogo para este menú</td></tr>';
 
   // ── GAPS → moved to Recommendations tab ──
   const gaps = d.gaps||[];
