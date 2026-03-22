@@ -381,8 +381,14 @@ Genera exactamente 5 recomendaciones estratégicas para el asesor de ventas:
 5. (type:"oportunidad") Potencial de la cuenta: volumen estimado mensual, productos ancla, frecuencia
 Cada punto: title (título corto 4-6 palabras), body (2-3 oraciones concretas y accionables), type
 
+REGLA CRÍTICA — matching_table solo incluye MATCHES REALES:
+- SOLO incluir ingredientes que tienen un SKU real en el catálogo
+- Si un ingrediente no tiene match, NO lo incluyas en matching_table (ni como "Sin match")
+- Las salsas caseras (holandesa, bechamel, etc.) y preparaciones del restaurante NO van en matching_table
+- matching_table = lista de oportunidades de venta, no inventario del menú
+
 ALTERNATIVAS — OBLIGATORIO SIEMPRE:
-- TODOS los ingredientes deben tener al menos 2 alternativas en el array alternatives
+- TODOS los ingredientes con match deben tener al menos 2 alternativas
 - Alternativas = otros SKUs de la MISMA sublínea o familia que podrían sustituir al principal
 - Ejemplo ribeye: alternatives = [{sku:"70011253", material:"RIBEYE LIPON DE RES 16 OZ CAB"}, {sku:"70011279", material:"RIBEYE LIPON DE RES 8 OZ CAB"}]
 - Ejemplo camarón: alternatives = [{sku:"70070094", material:"CAMARON COLOSAL U12"}, {sku:"70070123", material:"CAMARON 16-20 SIN CABEZA"}]
