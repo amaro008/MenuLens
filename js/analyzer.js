@@ -176,12 +176,12 @@ function buildSmartCatalogSummary() {
   const PRIORITY_FAMILIES = [
     'RES', 'AVES', 'PESCADOS Y MARISCOS', 'CERDO',
     'CARNES FRIAS', 'CORDERO Y OTROS', 'COMIDAS PREPARADAS',
-    'QUESOS'  // Alta demanda en todo tipo de restaurante
+    'QUESOS', 'YOGHURT'
   ];
 
   // Nivel 2 — Incluidos hasta llenar presupuesto de chars
   const SECONDARY_FAMILIES = [
-    'CREMAS', 'MNTQUILLAS Y MARGARI', 'YOGHURT',
+    'CREMAS', 'MNTQUILLAS Y MARGARI',
     'PANES Y PASTELES', 'VIGAR', 'ABARROTES'
   ];
 
@@ -381,11 +381,18 @@ Genera exactamente 5 recomendaciones estratégicas para el asesor de ventas:
 5. (type:"oportunidad") Potencial de la cuenta: volumen estimado mensual, productos ancla, frecuencia
 Cada punto: title (título corto 4-6 palabras), body (2-3 oraciones concretas y accionables), type
 
-REGLA CRÍTICA — matching_table solo incluye MATCHES REALES:
-- SOLO incluir ingredientes que tienen un SKU real en el catálogo
-- Si un ingrediente no tiene match, NO lo incluyas en matching_table (ni como "Sin match")
-- Las salsas caseras (holandesa, bechamel, etc.) y preparaciones del restaurante NO van en matching_table
-- matching_table = lista de oportunidades de venta, no inventario del menú
+REGLA CRÍTICA — matching_table solo incluye MATCHES REALES Y ESPECÍFICOS:
+- SOLO incluir un ingrediente si hay un SKU en el catálogo que lo describa ESPECÍFICAMENTE
+- "cajeta" → solo incluir si hay un SKU de cajeta en el catálogo. Si no hay, NO incluir
+- "mermelada" → solo si hay SKU de mermelada. Si no hay, NO incluir
+- "maple/jarabe de maple" → solo si hay SKU específico. Si no hay, NO incluir
+- "yogurt griego" → solo si hay SKU de yogurt griego. Si no hay, NO incluir
+- "speculoos/biscoff" → solo si hay SKU de speculoos. Si no hay, NO incluir
+- "claras de huevo" → solo si hay SKU de claras. Si no hay, NO incluir
+- NUNCA usar Nutella/crema avellana como sustituto de cajeta, maple, mermelada u otros untables
+- NUNCA hacer matching "aproximado" con un producto de categoría diferente
+- Las salsas caseras (holandesa, bechamel, etc.) NO van en matching_table
+- matching_table = lista de oportunidades de venta REALES con SKU exacto del catálogo
 
 ALTERNATIVAS — OBLIGATORIO SIEMPRE:
 - TODOS los ingredientes con match deben tener al menos 2 alternativas
