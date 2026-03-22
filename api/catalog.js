@@ -21,12 +21,22 @@ export default async function handler(req, res) {
     let officeId = null;
     const jwt = (req.headers.authorization || '').replace('Bearer ', '');
     if (jwt && jwt.length > 20) {
-      const userResp = await fetch(`${base}/users?select=office_id&limit=1`, {
-        headers: { 'apikey': anonKey, 'Authorization': `Bearer ${jwt}` }
-      });
+      // Use service key to bypass RLS and get user by auth.uid()
+      // We decode the JWT to get the user ID
+      const jwtPayload = JSON.parse(atob ? atob(jwt.split('.')[1]) : Buffer.from(jwt.split('.')[1], 'base64').toString());
+      const userId = jwtPayload.sub;
+      console.log('[catalog] JWT userId:', userId);
+
+      const userResp = await fetch(
+        `${base}/users?id=eq.${userId}&select=office_id&limit=1`,
+        { headers: { 'apikey': serviceKey, 'Authorization': `Bearer ${serviceKey}` } }
+      );
       if (userResp.ok) {
         const u = await userResp.json();
         officeId = u?.[0]?.office_id || null;
+        console.log('[catalog] user data:', JSON.stringify(u?.[0]), 'officeId:', officeId);
+      } else {
+        console.log('[catalog] user fetch failed:', userResp.status, await userResp.text());
       }
     }
 
