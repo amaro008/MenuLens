@@ -172,15 +172,26 @@ function buildSmartCatalogSummary() {
   if (!catalogData.length) return 'SIN CATÁLOGO CARGADO';
 
   // Priority families — always include ALL products from these
+  // Nivel 1 — Siempre incluidos completos sin límite
   const PRIORITY_FAMILIES = [
     'RES', 'AVES', 'PESCADOS Y MARISCOS', 'CERDO',
-    'CARNES FRIAS', 'CORDERO Y OTROS', 'COMIDAS PREPARADAS'
+    'CARNES FRIAS', 'CORDERO Y OTROS', 'COMIDAS PREPARADAS',
+    'QUESOS'  // Alta demanda en todo tipo de restaurante
   ];
 
-  // Secondary families — include sample
+  // Nivel 2 — Incluidos hasta llenar presupuesto de chars
   const SECONDARY_FAMILIES = [
-    'QUESOS', 'YOGHURT', 'CREMAS', 'MNTQUILLAS Y MARGARI',
-    'PANES Y PASTELES', 'FRUTAS Y VERDURAS', 'VIGAR'
+    'CREMAS', 'MNTQUILLAS Y MARGARI', 'YOGHURT',
+    'PANES Y PASTELES', 'VIGAR', 'ABARROTES'
+  ];
+
+  // Sublíneas especiales — siempre incluidas aunque familia sea secundaria
+  const PRIORITY_SUBLINEAS = [
+    'AVELLANA',    // Nutella
+    'QUESO CREMA', // Philadelphia (por si aparece fuera de QUESOS)
+    'UNTABLES',    // Untables premium
+    'CLARAS',      // Claras de huevo
+    'CHOCOLATE',   // Syrup de chocolate
   ];
 
   const normalize = (str) => (str || '').toString().trim().toUpperCase();
@@ -198,10 +209,12 @@ function buildSmartCatalogSummary() {
       ? `${r.SKU||r.sku}|${mat}|${familia}|${sub}|${keywords}`
       : `${r.SKU||r.sku}|${mat}|${familia}|${sub}`;
 
-    // "premium_abarrotes" keyword → treated as priority (always included)
+    // Priority sublineas → always included regardless of family
+    const sublinea = (r['Sublínea']||r.sublinea||'').toUpperCase();
+    const isPrioritySublinea = PRIORITY_SUBLINEAS.some(s => sublinea.includes(s));
     const isPremiumAbarrotes = keywords.toLowerCase().includes('premium_abarrotes');
 
-    if (PRIORITY_FAMILIES.includes(familia) || isPremiumAbarrotes) {
+    if (PRIORITY_FAMILIES.includes(familia) || isPrioritySublinea || isPremiumAbarrotes) {
       priorityProducts.push(line);
     } else if (SECONDARY_FAMILIES.includes(familia)) {
       secondaryProducts.push(line);
