@@ -190,11 +190,18 @@ function buildSmartCatalogSummary() {
   const otherProducts = [];
 
   catalogData.forEach(r => {
-    const familia = normalize(r.Familia || r.familia || '');
-    const keywords = r.Keywords || r.keywords || r.KEYWORDS || '';
-    const line = `SKU:${r.SKU||r.sku||''}|Material:${r.Material||r.material||''}|Marca:${r.Marca||r.marca||''}|Familia:${familia}|Sublinea:${r['Sublínea']||r.sublinea||''}|Línea:${r['Línea de Ventas']||r.linea_ventas||''}${keywords ? '|Keywords:'+keywords : ''}`;
+    const familia   = normalize(r.Familia || r.familia || '');
+    const keywords  = r.Keywords || r.keywords || r.KEYWORDS || '';
+    const mat       = (r.Material||r.material||'').substring(0,35);
+    const sub       = r['Sublínea']||r.sublinea||'';
+    const line      = keywords
+      ? `${r.SKU||r.sku}|${mat}|${familia}|${sub}|${keywords}`
+      : `${r.SKU||r.sku}|${mat}|${familia}|${sub}`;
 
-    if (PRIORITY_FAMILIES.includes(familia)) {
+    // "premium_abarrotes" keyword → treated as priority (always included)
+    const isPremiumAbarrotes = keywords.toLowerCase().includes('premium_abarrotes');
+
+    if (PRIORITY_FAMILIES.includes(familia) || isPremiumAbarrotes) {
       priorityProducts.push(line);
     } else if (SECONDARY_FAMILIES.includes(familia)) {
       secondaryProducts.push(line);
@@ -263,15 +270,32 @@ ASUNCIONES CONTROLADAS (marcar implicit: true):
 - Hamburguesa/Burger → "carne para hamburguesa (patty)"
 - Hot dog/Perro → "salchicha"
 - Alitas/Wings → "alitas de pollo"
-- Tacos sin especificar → "proteína para tacos (AMBIGUA)"  
+- Tacos sin especificar → "proteína para tacos (AMBIGUA)"
 - Panadería (croissant, brioche, muffin, concha) → "mantequilla"
+- Crepa dulce con Nutella → extraer "nutella" como ingrediente explícito
+- Omelette/Crepa de claras → extraer "claras de huevo" como ingrediente explícito
+- Cualquier platillo con "queso crema" en descripción → extraer "queso crema"
+- Cualquier platillo con "Oreo" → extraer "galleta Oreo"
 - NO aplicar en pan de sándwich, hamburguesa, torta o tortillas
 
 INGREDIENTE VENDIBLE — SÍ incluir:
 proteínas, carnes frías/embutidos, quesos/lácteos, panes/masas,
-vegetales o frutas identificables, salsas explícitas, condimentos relevantes
+salsas explícitas, condimentos relevantes
+
+PRODUCTOS DE MARCA — SIEMPRE incluir y buscar en catálogo:
+- Nutella → buscar "CREMA AVELLANA" o "NUTELLA" en catálogo
+- Biscoff/Speculoos → buscar "SPECULOOS" o "GALLETA SPECULOOS"
+- Oreo → buscar "GALLETA OREO" o "OREO"
+- Cajeta → buscar "CAJETA" en catálogo
+- Crema de cacahuate → buscar "CREMA CACAHUATE"
+- Queso crema → buscar "QUESO CREMA" en familia QUESOS
+- Clara de huevo → buscar "CLARA" o "CLARAS" en catálogo
+- Crema batida/chantilly → buscar "CREMA BATIDA" o "CHANTILLY"
+- Maple/mermelada → buscar en UNTABLES o ABARROTES
 
 NO incluir: adjetivos, técnicas de cocción, sensaciones, "salsa de la casa"
+NO incluir como ingrediente vendible: frutas frescas (fresa, mango, plátano, naranja, etc.)
+  verduras frescas (espinaca, lechuga, tomate, pepino, etc.), hierbas frescas (cilantro, etc.)
 
 PRIORIDAD COMERCIAL (MUY IMPORTANTE — define el orden de todo):
 P1: Proteínas premium (ribeye, new york, filetes, mariscos, costillas, langosta, pulpo, camarón, arrachera)
@@ -362,6 +386,10 @@ ORDEN DEL ARRAY matching_table — OBLIGATORIO:
 - Ordenar TODO el array matching_table de mayor a menor prioridad comercial
 - Primero todos los P1 (por menciones desc), luego P2, P3, P4, P5
 - Un P1 con 1 mención SIEMPRE va antes que un P5 con 10 menciones
+- EXCLUIR del matching_table: frutas frescas (fresa, mango, plátano, manzana, naranja, limón,
+  arándano, coco, piña, uva, etc.), verduras frescas (espinaca, lechuga, tomate cherry, pepino,
+  arúgula, etc.), hierbas frescas (cilantro, perejil, albahaca, etc.)
+  Estos productos NO se venden por una distribuidora de alimentos — no los incluyas
 
 
 4. NUNCA un P5 aparece antes que un P1 en el top10
