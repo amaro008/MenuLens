@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="css/main.css">
 <link rel="stylesheet" href="css/components.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 </head>
 <body>
 <div id="app">
@@ -166,6 +167,49 @@ function compressImage(file, maxSizeKB = 800) {
   });
 }
 
+// ── PDF TO IMAGES ─────────────────────
+// Convert PDF pages to compressed JPG images to stay under Vercel 4.5MB limit
+async function pdfToImages(file, maxSizeKB = 800) {
+  try {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const images = [];
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale: 1.5 }); // good quality for OCR
+      const canvas = document.createElement('canvas');
+      canvas.width  = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
+      // Compress to JPEG
+      let quality = 0.85;
+      let dataUrl  = canvas.toDataURL('image/jpeg', quality);
+      while (dataUrl.length * 0.75 > maxSizeKB * 1024 && quality > 0.4) {
+        quality -= 0.1;
+        dataUrl = canvas.toDataURL('image/jpeg', quality);
+      }
+
+      images.push({
+        base64: dataUrl.split(',')[1],
+        type: 'image/jpeg',
+        name: `${file.name}_p${i}.jpg`,
+        size: Math.round(dataUrl.length * 0.75)
+      });
+    }
+
+    return images;
+  } catch(e) {
+    console.warn('PDF conversion failed, sending as-is:', e);
+    return null; // fallback to original
+  }
+}
+
 // ── FILE UPLOAD ────────────────────────
 function triggerFileInput() {
   document.getElementById('fileInput').click();
@@ -179,14 +223,37 @@ function handleFiles(fileList) {
       toast(file.name + ' supera 15MB — omitido', 'error');
       return;
     }
-    // Compress images to stay under Vercel 4.5MB request limit
-    compressImage(file, 800).then(({ base64, type }) => {
-      const compressedSize = Math.round(base64.length * 0.75); // approx bytes
-      _files.push({ name: file.name, base64, type, size: compressedSize });
-      if (_files.length === 1) setActiveFile(0);
-      else renderFileList();
-      checkBtn();
-    });
+    if (file.type === 'application/pdf') {
+      // Convert PDF pages to compressed images
+      toast('Procesando PDF...', '');
+      pdfToImages(file, 800).then(images => {
+        if (images && images.length > 0) {
+          images.forEach((img, idx) => {
+            _files.push(img);
+          });
+          toast(`PDF convertido: ${images.length} página${images.length>1?'s':''}`, 'success');
+        } else {
+          // Fallback: send PDF as-is
+          const reader = new FileReader();
+          reader.onload = e => {
+            _files.push({ name: file.name, base64: e.target.result.split(',')[1], type: file.type, size: file.size });
+          };
+          reader.readAsDataURL(file);
+        }
+        if (_files.length === 1 || images?.length > 0) setActiveFile(0);
+        else renderFileList();
+        checkBtn();
+      });
+    } else {
+      // Compress images to stay under Vercel 4.5MB request limit
+      compressImage(file, 800).then(({ base64, type }) => {
+        const compressedSize = Math.round(base64.length * 0.75);
+        _files.push({ name: file.name, base64, type, size: compressedSize });
+        if (_files.length === 1) setActiveFile(0);
+        else renderFileList();
+        checkBtn();
+      });
+    }
   });
   // Reset input so same file can be re-selected
   document.getElementById('fileInput').value = '';
